@@ -43,6 +43,16 @@ class InferenceService:
         self._adapter_search_paths: list[str] = list(config.DEFAULT_ADAPTER_SEARCH_PATHS)
         self._cached_adapters: list[AdapterInfo] = []
 
+    # ── GPU Detection (lightweight, no model download) ──────────────────
+
+    def detect_gpu(self):
+        """Detect GPU capabilities without loading any model."""
+        try:
+            from acestep.gpu_config import get_gpu_config
+            self.gpu_config = get_gpu_config()
+        except Exception as e:
+            print(f"[InferenceService] GPU detection failed: {e}")
+
     # ── Initialization ────────────────────────────────────────────────────
 
     def initialize(
@@ -51,7 +61,7 @@ class InferenceService:
         lm_model: Optional[str] = None,
         checkpoint_dir: Optional[str] = None,
     ) -> str:
-        """Initialize the inference engine. Called at startup."""
+        """Initialize the inference engine with a specific model."""
         if checkpoint_dir:
             self.checkpoint_dir = checkpoint_dir
 
@@ -60,9 +70,14 @@ class InferenceService:
         from acestep.llm_inference import LLMHandler
         from acestep.gpu_config import get_gpu_config, get_gpu_memory_gb
 
-        # Detect GPU
-        self.gpu_config = get_gpu_config()
+        # Detect GPU if not done yet
+        if not self.gpu_config:
+            self.gpu_config = get_gpu_config()
         gpu_mem = get_gpu_memory_gb()
+
+        # Unload current adapter if switching models
+        if self.dit_handler and hasattr(self.dit_handler, 'lora_loaded') and self.dit_handler.lora_loaded:
+            self.dit_handler.unload_lora()
 
         # Initialize DiT handler
         self.dit_handler = AceStepHandler()
@@ -75,8 +90,9 @@ class InferenceService:
         self.current_model_name = model_name
         self.current_model_type = config.detect_model_type(model_name)
 
-        # Initialize LLM handler
-        self.llm_handler = LLMHandler()
+        # Initialize LLM handler (always create it, conditionally load model)
+        if not self.llm_handler:
+            self.llm_handler = LLMHandler()
         if lm_model and gpu_mem and gpu_mem >= 8:
             try:
                 lm_status, lm_ok = self.llm_handler.initialize(
@@ -95,15 +111,20 @@ class InferenceService:
     # ── Model Management ──────────────────────────────────────────────────
 
     def load_model(self, model_name: str, checkpoint_path: Optional[str] = None) -> str:
-        """Switch to a different DiT model (unloads current adapter)."""
-        if not self._initialized:
-            return "Service not initialized"
+        """Load or switch to a DiT model. Works for first load and switching."""
+        cp_dir = checkpoint_path or self.checkpoint_dir
 
-        # Unload current adapter first
-        if self.dit_handler and self.dit_handler.lora_loaded:
+        # If not yet initialized, do a full initialize
+        if not self._initialized:
+            return self.initialize(
+                model_name=model_name,
+                checkpoint_dir=cp_dir,
+            )
+
+        # Already initialized — switch model
+        if self.dit_handler and hasattr(self.dit_handler, 'lora_loaded') and self.dit_handler.lora_loaded:
             self.dit_handler.unload_lora()
 
-        cp_dir = checkpoint_path or self.checkpoint_dir
         status_msg, _ok = self.dit_handler.initialize_service(
             project_root=cp_dir,
             config_path=model_name,
@@ -116,20 +137,22 @@ class InferenceService:
 
     def get_model_status(self) -> ModelStatusResponse:
         """Return full model/GPU/LM status for the frontend."""
-        caps = config.MODEL_CAPABILITIES.get(
-            self.current_model_type,
-            config.MODEL_CAPABILITIES["unknown"],
-        )
+        # Current model (None if not initialized)
+        current = None
+        if self._initialized and self.current_model_name:
+            caps = config.MODEL_CAPABILITIES.get(
+                self.current_model_type,
+                config.MODEL_CAPABILITIES["unknown"],
+            )
+            current = ModelInfo(
+                name=self.current_model_name,
+                type=self.current_model_type,
+                path=self.checkpoint_dir,
+                loaded=True,
+                capabilities=ModelCapabilities(**caps),
+            )
 
-        current = ModelInfo(
-            name=self.current_model_name,
-            type=self.current_model_type,
-            path=self.checkpoint_dir,
-            loaded=self._initialized,
-            capabilities=ModelCapabilities(**caps),
-        )
-
-        # Scan for available models
+        # Scan for available models in the checkpoint directory
         available: list[ModelInfo] = []
         cp = Path(self.checkpoint_dir)
         if cp.exists():
@@ -142,7 +165,7 @@ class InferenceService:
                             name=d.name,
                             type=mtype,
                             path=str(d),
-                            loaded=(d.name == self.current_model_name),
+                            loaded=(self._initialized and d.name == self.current_model_name),
                             capabilities=ModelCapabilities(**mcaps),
                         )
                     )
@@ -178,6 +201,7 @@ class InferenceService:
             available_models=available,
             gpu=gpu_info,
             lm=lm_info,
+            initialized=self._initialized,
         )
 
     # ── Adapter Management ────────────────────────────────────────────────

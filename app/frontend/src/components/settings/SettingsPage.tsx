@@ -8,11 +8,14 @@ import {
   AlertCircle,
   Loader2,
   RefreshCw,
+  Play,
+  Cpu,
 } from 'lucide-react'
 import clsx from 'clsx'
 import Button from '../ui/Button'
 import Input from '../ui/Input'
 import Card from '../ui/Card'
+import Badge from '../ui/Badge'
 import Header from '../layout/Header'
 import {
   getSettings,
@@ -20,6 +23,9 @@ import {
   validatePath,
   type UserSettings,
 } from '../../api/settings'
+import { getModelStatus, loadModel } from '../../api/models'
+import { useSettingsStore } from '../../stores/useSettingsStore'
+import type { ModelStatusResponse } from '../../types/api'
 
 // ── Path input with validation ──────────────────────────────────────────────
 
@@ -97,6 +103,12 @@ export default function SettingsPage() {
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // Model loading state
+  const [modelStatus, setModelStatus] = useState<ModelStatusResponse | null>(null)
+  const [modelLoading, setModelLoading] = useState(false)
+  const [modelError, setModelError] = useState<string | null>(null)
+  const refreshGlobalStatus = useSettingsStore((s) => s.fetchModelStatus)
+
   // Form state
   const [trainerPath, setTrainerPath] = useState('')
   const [checkpointDir, setCheckpointDir] = useState('')
@@ -108,12 +120,13 @@ export default function SettingsPage() {
   const [validation, setValidation] = useState<Record<string, boolean | null>>({})
   const [validating, setValidating] = useState<Record<string, boolean>>({})
 
-  // Load settings
+  // Load settings + model status
   const fetchSettings = useCallback(async () => {
     setLoading(true)
     try {
-      const s = await getSettings()
+      const [s, ms] = await Promise.all([getSettings(), getModelStatus()])
       setSettings(s)
+      setModelStatus(ms)
       setTrainerPath(s.trainer_path)
       setCheckpointDir(s.checkpoint_dir)
       setLoraPaths(s.lora_search_paths)
@@ -163,6 +176,11 @@ export default function SettingsPage() {
       })
       setSettings(updated)
       setSaved(true)
+      // Refresh model status (available models may have changed)
+      try {
+        const ms = await getModelStatus()
+        setModelStatus(ms)
+      } catch { /* ignore */ }
       setTimeout(() => setSaved(false), 3000)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save settings')
@@ -170,6 +188,24 @@ export default function SettingsPage() {
       setSaving(false)
     }
   }, [trainerPath, checkpointDir, loraPaths, outputDir, stemsDir])
+
+  // Load a model
+  const handleLoadModel = useCallback(async (modelName: string) => {
+    setModelLoading(true)
+    setModelError(null)
+    try {
+      await loadModel(modelName)
+      // Refresh status
+      const ms = await getModelStatus()
+      setModelStatus(ms)
+      // Update global store so sidebar updates
+      refreshGlobalStatus()
+    } catch (err) {
+      setModelError(err instanceof Error ? err.message : 'Failed to load model')
+    } finally {
+      setModelLoading(false)
+    }
+  }, [refreshGlobalStatus])
 
   // LoRA path helpers
   const addLoraPath = useCallback(() => {
@@ -199,6 +235,10 @@ export default function SettingsPage() {
       JSON.stringify(loraPaths.filter((p) => p.trim())) !==
         JSON.stringify(settings.lora_search_paths))
 
+  const isInitialized = modelStatus?.initialized ?? false
+  const availableModels = modelStatus?.available_models ?? []
+  const currentModel = modelStatus?.current_model
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -213,6 +253,21 @@ export default function SettingsPage() {
         title="Settings"
         subtitle="Configure model paths, LoRA directories, and output locations"
       />
+
+      {/* Setup required banner */}
+      {!isInitialized && (
+        <div className="flex items-start gap-3 p-4 rounded-[var(--radius-lg)] bg-[var(--accent-muted)] border border-[var(--accent)]/30">
+          <AlertCircle className="h-5 w-5 text-[var(--accent-hover)] shrink-0 mt-0.5" />
+          <div className="flex flex-col gap-1">
+            <span className="text-sm font-semibold text-[var(--text-primary)]">
+              Setup Required
+            </span>
+            <span className="text-sm text-[var(--text-secondary)]">
+              Configure the paths below, save, then load a model to start generating music.
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* Error banner */}
       {error && (
@@ -248,6 +303,104 @@ export default function SettingsPage() {
             valid={validation.checkpoint}
             validating={validating.checkpoint}
           />
+        </div>
+      </Card>
+
+      {/* Load Model */}
+      <Card>
+        <div className="flex flex-col gap-4 p-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-base font-semibold text-[var(--text-primary)]">
+                Load Model
+              </h3>
+              <p className="text-xs text-[var(--text-muted)] mt-1">
+                {isInitialized
+                  ? 'Switch between available models. Save settings first if you changed the checkpoint directory.'
+                  : 'Save your paths above first, then select a model to load.'}
+              </p>
+            </div>
+            {currentModel && (
+              <Badge variant="success">
+                <Cpu className="h-3 w-3 mr-1" />
+                {currentModel.name}
+              </Badge>
+            )}
+          </div>
+
+          {/* Model error */}
+          {modelError && (
+            <div className="flex items-center gap-2 p-2 rounded-[var(--radius)] bg-[var(--error)]/10">
+              <AlertCircle className="h-4 w-4 text-[var(--error)] shrink-0" />
+              <span className="text-xs text-[var(--error)]">{modelError}</span>
+            </div>
+          )}
+
+          {/* Available models list */}
+          {availableModels.length > 0 ? (
+            <div className="flex flex-col gap-2">
+              {availableModels.map((m) => (
+                <div
+                  key={m.name}
+                  className={clsx(
+                    'flex items-center justify-between p-3 rounded-[var(--radius)]',
+                    'border transition-colors',
+                    m.loaded
+                      ? 'border-[var(--accent)] bg-[var(--accent-muted)]'
+                      : 'border-[var(--border)] bg-[var(--bg-tertiary)] hover:border-[var(--border-hover)]',
+                  )}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <Cpu className="h-4 w-4 text-[var(--text-muted)] shrink-0" />
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-sm font-medium text-[var(--text-primary)] truncate">
+                        {m.name}
+                      </span>
+                      <span className="text-xs text-[var(--text-muted)]">
+                        {m.type} &middot; {m.capabilities.max_steps} steps max
+                        {m.capabilities.cfg_support ? ' &middot; CFG' : ''}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Badge variant={m.type === 'turbo' ? 'accent' : m.type === 'base' ? 'default' : 'warning'}>
+                      {m.type}
+                    </Badge>
+                    {m.loaded ? (
+                      <Badge variant="success">Loaded</Badge>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => handleLoadModel(m.name)}
+                        loading={modelLoading}
+                        disabled={isDirty}
+                      >
+                        <Play className="h-3 w-3" />
+                        Load
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="flex flex-col items-center gap-2 py-8 text-center">
+              <Cpu className="h-8 w-8 text-[var(--text-muted)]" />
+              <p className="text-sm text-[var(--text-muted)]">
+                No models found in the checkpoint directory.
+              </p>
+              <p className="text-xs text-[var(--text-muted)]">
+                Make sure the checkpoint directory path is correct and contains model folders with config.json files.
+              </p>
+            </div>
+          )}
+
+          {isDirty && availableModels.length > 0 && (
+            <p className="text-xs text-[var(--warning)]">
+              Save your settings first before loading a model.
+            </p>
+          )}
         </div>
       </Card>
 

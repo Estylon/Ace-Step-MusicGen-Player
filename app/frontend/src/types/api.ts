@@ -95,6 +95,7 @@ export interface ModelStatusResponse {
   available_models: ModelInfo[];
   gpu: GPUInfo;
   lm: LMInfo;
+  initialized: boolean;
 }
 
 // ── Adapters ────────────────────────────────────────────────────────────────

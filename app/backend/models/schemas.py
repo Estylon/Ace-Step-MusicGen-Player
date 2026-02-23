@@ -151,6 +151,7 @@ class ModelStatusResponse(BaseModel):
     available_models: list[ModelInfo] = []
     gpu: GPUInfo = GPUInfo()
     lm: LMInfo = LMInfo()
+    initialized: bool = False  # True once a model has been loaded
 
 
 class LoadModelRequest(BaseModel):

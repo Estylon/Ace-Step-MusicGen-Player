@@ -22,11 +22,16 @@ async def model_status():
 
 @router.post("/load")
 async def load_model(request: LoadModelRequest):
-    """Switch to a different DiT model."""
+    """Load or switch to a DiT model. Handles both first load and switching."""
     svc = _get_service()
     try:
         msg = svc.load_model(request.model_name, request.checkpoint_path)
-        return {"status": "ok", "message": msg, "model": request.model_name}
+        return {
+            "status": "ok",
+            "message": msg,
+            "model": request.model_name,
+            "initialized": svc._initialized,
+        }
     except Exception as e:
         raise HTTPException(500, str(e))
 

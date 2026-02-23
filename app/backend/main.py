@@ -47,31 +47,19 @@ async def lifespan(app: FastAPI):
     print(f"[Backend]   Checkpoint dir: {user_settings.checkpoint_dir}")
     print(f"[Backend]   LoRA paths: {user_settings.lora_search_paths}")
 
-    # CLI args / env vars can override saved settings
-    model = os.environ.get("ACESTEP_MODEL", "acestep-v15-turbo")
-    lm_model = os.environ.get("ACESTEP_LM_MODEL", "")
-    checkpoint_dir = os.environ.get("ACESTEP_CHECKPOINT_DIR", user_settings.checkpoint_dir)
-
-    # Initialize inference engine
-    print(f"[Backend] Initializing ACE-Step model: {model}")
-    print(f"[Backend] Checkpoint dir: {checkpoint_dir}")
+    # Apply user settings (paths, adapter search dirs, output dirs)
     try:
-        status = inference_service.initialize(
-            model_name=model,
-            lm_model=lm_model or None,
-            checkpoint_dir=checkpoint_dir,
-        )
-        # Apply user settings (adapter search paths, output dirs)
         apply_settings(user_settings)
-        print(f"[Backend] Init complete: {status}")
-    except Exception as e:
-        print(f"[Backend] WARNING: Model init failed: {e}")
-        print("[Backend] The server will start but generation will fail until a model is loaded.")
-        # Still apply settings for paths
-        try:
-            apply_settings(user_settings)
-        except Exception:
-            pass
+    except Exception:
+        pass
+
+    # Detect GPU (lightweight, no model download)
+    inference_service.detect_gpu()
+
+    # Do NOT auto-load a model on startup.
+    # The user should first configure paths in Settings, then load a model explicitly.
+    print("[Backend] Server ready — no model loaded.")
+    print("[Backend] Go to Settings to configure paths, then load a model.")
 
     yield
 

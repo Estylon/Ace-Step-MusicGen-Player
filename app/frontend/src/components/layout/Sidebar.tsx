@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { Music, Scissors, Library, Settings, Cpu, Zap, HardDrive } from 'lucide-react'
+import { Music, Scissors, Library, Settings, Cpu, Zap, HardDrive, AlertCircle } from 'lucide-react'
 import clsx from 'clsx'
 import Badge from '../ui/Badge'
 import { useSettingsStore } from '../../stores/useSettingsStore'
@@ -15,6 +15,7 @@ export default function Sidebar() {
   const modelStatus = useSettingsStore((s) => s.modelStatus)
   const adapterList = useSettingsStore((s) => s.adapterList)
 
+  const isInitialized = modelStatus?.initialized ?? false
   const gpu = modelStatus?.gpu
   const model = modelStatus?.current_model
   const lm = modelStatus?.lm
@@ -68,6 +69,16 @@ export default function Sidebar() {
 
       {/* Separator */}
       <div className="mx-4 my-3 h-px bg-[var(--border)]" />
+
+      {/* Setup required banner */}
+      {!isInitialized && (
+        <div className="mx-3 mb-3 flex items-center gap-2 px-3 py-2 rounded-[var(--radius)] bg-[var(--warning-muted)] border border-[var(--warning)]/20">
+          <AlertCircle className="h-3.5 w-3.5 text-[var(--warning)] shrink-0" />
+          <span className="text-xs text-[var(--warning)]">
+            No model loaded
+          </span>
+        </div>
+      )}
 
       {/* Model Status */}
       <div className="px-4 flex flex-col gap-3">
@@ -144,9 +155,11 @@ export default function Sidebar() {
               </span>
             </div>
           )}
-          <Badge variant={gpuTier} className="self-start">
-            {gpuTier === 'success' ? 'Healthy' : gpuTier === 'warning' ? 'Moderate' : 'Low VRAM'}
-          </Badge>
+          {vramTotal > 0 && (
+            <Badge variant={gpuTier} className="self-start">
+              {gpuTier === 'success' ? 'Healthy' : gpuTier === 'warning' ? 'Moderate' : 'Low VRAM'}
+            </Badge>
+          )}
         </div>
 
         {/* LM Status */}
