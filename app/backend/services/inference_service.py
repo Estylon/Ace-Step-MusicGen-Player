@@ -394,10 +394,11 @@ class InferenceService:
         if not self.dit_handler:
             return AdapterCurrent()
         status = self.dit_handler.get_lora_status()
+        raw_path = status.get("path") or ""  # guard against None values
         return AdapterCurrent(
             loaded=status.get("loaded", False),
-            name=Path(status.get("path", "")).name if status.get("path") else "",
-            path=status.get("path", ""),
+            name=Path(raw_path).name if raw_path else "",
+            path=raw_path,
             type="lora",  # handler doesn't distinguish type in status
             scale=status.get("scale", 1.0),
             active=status.get("enabled", False),
