@@ -36,10 +36,13 @@ uv pip install -r "%~dp0..\app\backend\requirements.txt" --quiet
 echo [4/6] Installing PyTorch with CUDA...
 python -c "import torch" 2>nul
 if errorlevel 1 (
-    uv pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124 --quiet
+    pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126
     if errorlevel 1 (
-        echo  [WARNING] CUDA install failed, trying CPU...
-        uv pip install torch torchvision torchaudio --quiet
+        pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
+        if errorlevel 1 (
+            echo  [WARNING] CUDA install failed, trying CPU...
+            pip install torch torchvision torchaudio
+        )
     )
 )
 

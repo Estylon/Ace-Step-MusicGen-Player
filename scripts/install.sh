@@ -20,9 +20,11 @@ uv pip install -r "$PROJECT_DIR/app/backend/requirements.txt"
 
 echo "[4/6] Installing PyTorch..."
 if [[ "$(uname)" == "Darwin" ]]; then
-    uv pip install torch torchvision torchaudio
+    pip install torch torchvision torchaudio
 else
-    uv pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
+    pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126 || \
+    pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124 || \
+    pip install torch torchvision torchaudio
 fi
 
 echo "[5/6] Installing audio-separator..."

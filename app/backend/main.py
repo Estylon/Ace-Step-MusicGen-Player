@@ -16,8 +16,9 @@ from pathlib import Path
 # Ensure config runs first (sets up sys.path for ACE-Step imports)
 import config
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from api.router import api_router
@@ -99,11 +100,38 @@ app.add_middleware(
 # API routes
 app.include_router(api_router)
 
-# Serve built frontend (if exists)
+# ── Serve built frontend (SPA routing) ───────────────────────────────────────
+
 static_dir = config.STATIC_DIR
 if static_dir.exists() and (static_dir / "index.html").exists():
-    # Serve at root — MUST be after API routes
-    app.mount("/", StaticFiles(directory=str(static_dir), html=True), name="static")
+    # Mount /assets for JS/CSS bundles
+    assets_dir = static_dir / "assets"
+    if assets_dir.exists():
+        app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets")
+
+    # Serve known static files at root (vite.svg, favicon, etc.)
+    @app.get("/vite.svg")
+    async def vite_svg():
+        svg = static_dir / "vite.svg"
+        if svg.exists():
+            return FileResponse(str(svg), media_type="image/svg+xml")
+
+    @app.get("/favicon.ico")
+    async def favicon():
+        ico = static_dir / "favicon.ico"
+        if ico.exists():
+            return FileResponse(str(ico))
+        # Fallback: serve vite.svg as favicon
+        svg = static_dir / "vite.svg"
+        if svg.exists():
+            return FileResponse(str(svg), media_type="image/svg+xml")
+
+    # SPA catch-all: serve index.html for any non-API route
+    # This enables client-side routing (react-router-dom)
+    @app.get("/{full_path:path}")
+    async def serve_spa(request: Request, full_path: str):
+        # Don't intercept API routes (they're already registered above)
+        return FileResponse(str(static_dir / "index.html"))
 else:
     @app.get("/")
     async def root():
