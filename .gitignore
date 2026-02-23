@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+app/backend/venv/
+app/backend/env/
+
+# Generated data
+app/backend/audio_output/
+app/backend/stems_output/
+app/backend/data/
+app/backend/uploads/
+
+# Node
+app/frontend/node_modules/
+app/frontend/dist/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env
+.env
+.env.local
