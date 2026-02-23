@@ -1,6 +1,8 @@
 import { Music, Settings, AlertCircle } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useSettingsStore } from '../../stores/useSettingsStore'
+import ModelSelector from './ModelSelector'
+import AdapterSelector from './AdapterSelector'
 import TaskTypeSelector from './TaskTypeSelector'
 import PromptEditor from './PromptEditor'
 import MusicMetadata from './MusicMetadata'
@@ -12,8 +14,6 @@ import GenerationResults from './GenerationResults'
 
 export default function GeneratePage() {
   const modelStatus = useSettingsStore((s) => s.modelStatus)
-  const adapterList = useSettingsStore((s) => s.adapterList)
-  const adapterLoaded = adapterList?.current?.loaded ?? false
   const isInitialized = modelStatus?.initialized ?? false
   const navigate = useNavigate()
 
@@ -60,20 +60,28 @@ export default function GeneratePage() {
         <div className="flex flex-col lg:flex-row gap-6">
           {/* Left column: Form (60%) */}
           <div className="flex flex-col gap-5 lg:w-[60%] min-w-0">
+            {/* Model & Adapter quick selectors */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1">
+                <span className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider px-1">
+                  Model
+                </span>
+                <ModelSelector />
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider px-1">
+                  LoRA / LoKr Adapter
+                </span>
+                <AdapterSelector />
+              </div>
+            </div>
+
             <TaskTypeSelector />
             <PromptEditor />
             <MusicMetadata />
             <DiffusionSettings />
             <LMSettings />
             <BatchSettings />
-
-            {adapterLoaded && (
-              <div className="flex items-center gap-2 px-3 py-2 rounded-[var(--radius)] bg-[var(--accent-muted)] border border-[var(--accent)] border-opacity-30">
-                <span className="text-xs text-[var(--accent-hover)]">
-                  LoRA adapter active: {adapterList?.current?.name}
-                </span>
-              </div>
-            )}
           </div>
 
           {/* Right column: Generate + Results (40%) */}

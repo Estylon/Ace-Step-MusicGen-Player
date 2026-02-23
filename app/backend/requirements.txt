@@ -25,6 +25,9 @@ safetensors>=0.4.0
 loguru>=0.7.3
 pyyaml
 
+# ── Model architecture dependencies ──────────────────────────────────
+vector_quantize_pytorch
+
 # ── LoRA/LoKr adapter support ──────────────────────────────────────
 lycoris-lora>=2.0.0
 
