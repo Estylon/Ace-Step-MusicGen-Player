@@ -1,4 +1,5 @@
 @echo off
+setlocal enabledelayedexpansion
 echo ============================================
 echo  ACE-Step MusicGen Player - Install
 echo ============================================
@@ -20,29 +21,53 @@ if errorlevel 1 (
     exit /b 1
 )
 
-echo [1/5] Creating Python virtual environment...
-python -m venv "%~dp0..\app\backend\venv"
+echo [1/6] Creating Python virtual environment...
+if not exist "%~dp0..\app\backend\venv\Scripts\python.exe" (
+    python -m venv "%~dp0..\app\backend\venv"
+)
 call "%~dp0..\app\backend\venv\Scripts\activate.bat"
 
-echo [2/5] Installing uv package manager...
-pip install uv --quiet
+echo [2/6] Installing uv package manager...
+pip install uv --quiet --disable-pip-version-check 2>nul
 
-echo [3/5] Installing Python dependencies...
-uv pip install -r "%~dp0..\app\backend\requirements.txt"
+echo [3/6] Installing Python dependencies...
+uv pip install -r "%~dp0..\app\backend\requirements.txt" --quiet
 
-echo [4/5] Installing PyTorch with CUDA...
-uv pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
+echo [4/6] Installing PyTorch with CUDA...
+python -c "import torch" 2>nul
+if errorlevel 1 (
+    uv pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124 --quiet
+    if errorlevel 1 (
+        echo  [WARNING] CUDA install failed, trying CPU...
+        uv pip install torch torchvision torchaudio --quiet
+    )
+)
 
-echo [5/5] Installing frontend dependencies...
+echo [5/6] Installing audio-separator...
+uv pip install "audio-separator[gpu]>=0.30.0" --quiet 2>nul
+if errorlevel 1 (
+    echo   Trying Cython workaround for diffq-fixed...
+    uv pip install Cython --quiet 2>nul
+    pip install diffq-fixed --no-build-isolation --quiet 2>nul
+    if errorlevel 1 (
+        echo   Installing audio-separator without diffq...
+        pip install audio-separator --no-deps --quiet 2>nul
+        uv pip install requests six tqdm pydub julius einops pyyaml ml_collections resampy beartype "rotary-embedding-torch>=0.5.3" scipy onnxruntime --quiet 2>nul
+    ) else (
+        uv pip install "audio-separator[gpu]>=0.30.0" --quiet 2>nul
+    )
+)
+
+echo [6/6] Installing frontend dependencies...
 cd /d "%~dp0..\app\frontend"
-call npm install
+call npm install --loglevel=error 2>nul
 
 echo.
 echo ============================================
 echo  Install Complete!
 echo.
-echo  Make sure D:\ace-lora-trainer exists with
-echo  the ACE-Step model checkpoints.
+echo  After first launch, go to Settings to
+echo  configure your model and LoRA paths.
 echo.
 echo  Run start.bat to launch the application.
 echo ============================================

@@ -47,9 +47,11 @@ echo.
 :: ── Check trainer path ───────────────────────────────────────────────
 
 set "TRAINER_PATH=D:\ace-lora-trainer"
+if defined ACESTEP_TRAINER_PATH set "TRAINER_PATH=%ACESTEP_TRAINER_PATH%"
 if not exist "%TRAINER_PATH%\acestep" (
     echo  [WARNING] ACE-Step trainer not found at %TRAINER_PATH%
-    echo  You can set ACESTEP_TRAINER_PATH environment variable to your trainer location.
+    echo  You can configure the trainer path in the app's Settings page,
+    echo  or set the ACESTEP_TRAINER_PATH environment variable.
     echo  The app will still install, but generation won't work without the trainer.
     echo.
     set /p "CONTINUE=Continue anyway? (Y/N): "
@@ -59,7 +61,7 @@ if not exist "%TRAINER_PATH%\acestep" (
 
 :: ── Step 1: Python virtual environment ───────────────────────────────
 
-echo [1/6] Creating Python virtual environment...
+echo [1/7] Creating Python virtual environment...
 if not exist "%~dp0app\backend\venv\Scripts\python.exe" (
     python -m venv "%~dp0app\backend\venv"
     if errorlevel 1 (
@@ -76,13 +78,13 @@ call "%~dp0app\backend\venv\Scripts\activate.bat"
 
 :: ── Step 2: uv package manager ───────────────────────────────────────
 
-echo [2/6] Installing uv package manager...
+echo [2/7] Installing uv package manager...
 pip install uv --quiet --disable-pip-version-check 2>nul
 echo   Done.
 
 :: ── Step 3: Python dependencies ──────────────────────────────────────
 
-echo [3/6] Installing Python dependencies...
+echo [3/7] Installing Python dependencies...
 uv pip install -r "%~dp0app\backend\requirements.txt" --quiet
 if errorlevel 1 (
     echo  [ERROR] Failed to install Python dependencies
@@ -94,7 +96,7 @@ echo   Done.
 
 :: ── Step 4: PyTorch with CUDA ────────────────────────────────────────
 
-echo [4/6] Installing PyTorch with CUDA support...
+echo [4/7] Installing PyTorch with CUDA support...
 python -c "import torch; print(f'  PyTorch {torch.__version__} already installed (CUDA: {torch.cuda.is_available()})')" 2>nul
 if errorlevel 1 (
     echo   Downloading PyTorch (this may take a few minutes)...
@@ -106,9 +108,40 @@ if errorlevel 1 (
     echo   Done.
 )
 
-:: ── Step 5: Frontend dependencies ────────────────────────────────────
+:: ── Step 5: Audio Separator (stem separation) ────────────────────────
 
-echo [5/6] Installing frontend dependencies...
+echo [5/7] Installing audio-separator for stem separation...
+
+:: Try normal install first
+uv pip install "audio-separator[gpu]>=0.30.0" --quiet 2>nul
+if errorlevel 1 (
+    echo   Normal install failed (likely diffq-fixed build issue on Python 3.13+)
+    echo   Trying workaround: pre-install Cython + build without isolation...
+
+    :: Workaround: install Cython first, then diffq-fixed without build isolation
+    uv pip install Cython --quiet 2>nul
+    pip install diffq-fixed --no-build-isolation --quiet 2>nul
+
+    if errorlevel 1 (
+        echo   Cython workaround also failed.
+        echo   Installing audio-separator without diffq (non-quantized models only)...
+
+        :: Fallback: install without deps, then add what we need manually
+        pip install audio-separator --no-deps --quiet 2>nul
+        uv pip install requests six tqdm pydub julius einops pyyaml ml_collections resampy beartype "rotary-embedding-torch>=0.5.3" scipy onnxruntime --quiet 2>nul
+
+        echo   [NOTE] Installed audio-separator without diffq.
+        echo   Non-quantized stem models (htdemucs_ft, BS-RoFormer) will work fine.
+    ) else (
+        :: diffq-fixed installed, now install audio-separator normally
+        uv pip install "audio-separator[gpu]>=0.30.0" --quiet 2>nul
+    )
+)
+echo   Done.
+
+:: ── Step 6: Frontend dependencies ────────────────────────────────────
+
+echo [6/7] Installing frontend dependencies...
 cd /d "%~dp0app\frontend"
 call npm install --loglevel=error 2>nul
 if errorlevel 1 (
@@ -118,9 +151,9 @@ if errorlevel 1 (
 )
 echo   Done.
 
-:: ── Step 6: Build frontend ───────────────────────────────────────────
+:: ── Step 7: Build frontend ───────────────────────────────────────────
 
-echo [6/6] Building frontend for production...
+echo [7/7] Building frontend for production...
 call npm run build 2>nul
 if errorlevel 1 (
     echo  [WARNING] Frontend build failed. You can still use dev mode.
@@ -142,6 +175,11 @@ echo     start.bat
 echo.
 echo   For development mode (hot-reload):
 echo     scripts\dev.bat
+echo.
+echo   IMPORTANT: After first launch, go to Settings to configure:
+echo     - ACE-Step trainer path
+echo     - Checkpoint directory
+echo     - LoRA/LoKr search paths
 echo.
 echo   The app will be available at:
 echo     http://127.0.0.1:3456
