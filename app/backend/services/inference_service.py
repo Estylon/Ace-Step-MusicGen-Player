@@ -264,12 +264,31 @@ class InferenceService:
         return adapters
 
     def _detect_adapter(self, adapter_dir: Path) -> Optional[AdapterInfo]:
-        """Detect adapter type and metadata from a directory."""
+        """Detect adapter type and metadata from a directory.
+
+        Supports two layouts:
+          1. Flat:   adapter_dir/adapter_config.json  (or lokr_weights.safetensors)
+          2. Nested: adapter_dir/adapter/adapter_config.json  (common training output)
+
+        In both cases, the display name is ``adapter_dir.name`` (e.g. "Linkin Park").
+        """
+        # Resolve the actual directory containing adapter files.
+        # Check flat first, then nested "adapter/" subfolder.
+        files_dir = adapter_dir
+        nested = adapter_dir / "adapter"
+        if not (files_dir / "adapter_config.json").exists() and not (files_dir / "lokr_weights.safetensors").exists():
+            if nested.is_dir():
+                files_dir = nested
+            else:
+                return None
+
+        display_name = adapter_dir.name
+
         # LoKr detection
-        lokr_weights = adapter_dir / "lokr_weights.safetensors"
+        lokr_weights = files_dir / "lokr_weights.safetensors"
         if lokr_weights.exists():
             meta = {}
-            lokr_cfg = adapter_dir / "lokr_config.json"
+            lokr_cfg = files_dir / "lokr_config.json"
             if lokr_cfg.exists():
                 try:
                     meta = json.loads(lokr_cfg.read_text())
@@ -277,8 +296,8 @@ class InferenceService:
                     pass
             base_model = meta.get("base_model", "unknown")
             return AdapterInfo(
-                name=adapter_dir.name,
-                path=str(adapter_dir),
+                name=display_name,
+                path=str(files_dir),
                 type="lokr",
                 base_model=self._infer_base_model_type(base_model),
                 description=meta.get("description", ""),
@@ -289,7 +308,7 @@ class InferenceService:
             )
 
         # LoRA (PEFT) detection
-        peft_cfg = adapter_dir / "adapter_config.json"
+        peft_cfg = files_dir / "adapter_config.json"
         if peft_cfg.exists():
             try:
                 cfg = json.loads(peft_cfg.read_text())
@@ -300,8 +319,8 @@ class InferenceService:
             rank = cfg.get("r")
             alpha = cfg.get("lora_alpha")
             return AdapterInfo(
-                name=adapter_dir.name,
-                path=str(adapter_dir),
+                name=display_name,
+                path=str(files_dir),
                 type="lora",
                 base_model=base_type,
                 rank=rank,
