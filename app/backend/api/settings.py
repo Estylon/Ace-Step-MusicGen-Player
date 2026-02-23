@@ -72,7 +72,20 @@ def save_settings(settings: UserSettings) -> None:
 
 def apply_settings(settings: UserSettings) -> None:
     """Apply settings to the running service (hot-reload paths)."""
+    import sys
     from main import inference_service
+
+    # Update trainer sys.path so ACE-Step imports resolve correctly
+    new_trainer = settings.trainer_path
+    old_trainer = str(config.TRAINER_PATH)
+    if new_trainer != old_trainer:
+        # Remove old trainer path from sys.path if present
+        if old_trainer in sys.path:
+            sys.path.remove(old_trainer)
+        # Add new trainer path
+        if new_trainer not in sys.path:
+            sys.path.insert(0, new_trainer)
+        config.TRAINER_PATH = Path(new_trainer)
 
     # Update adapter search paths
     inference_service._adapter_search_paths = [

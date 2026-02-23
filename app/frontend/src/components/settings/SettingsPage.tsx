@@ -296,7 +296,7 @@ export default function SettingsPage() {
 
           <PathInput
             label="Checkpoint Directory"
-            description="Directory containing model checkpoints (turbo, base, SFT, custom). Usually {trainer}/checkpoints"
+            description="Parent directory containing model folders (e.g. acestep-v15-turbo, acestep-v15-base). Can also point to a single model folder."
             value={checkpointDir}
             onChange={setCheckpointDir}
             onValidate={(v) => handleValidate('checkpoint', v)}

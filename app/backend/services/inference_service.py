@@ -53,6 +53,21 @@ class InferenceService:
         except Exception as e:
             print(f"[InferenceService] GPU detection failed: {e}")
 
+    # ── Helpers ─────────────────────────────────────────────────────────────
+
+    def _resolve_checkpoint_root(self) -> Path:
+        """Return the real checkpoints root directory.
+
+        If ``self.checkpoint_dir`` accidentally points to a single model folder
+        (i.e. it directly contains ``config.json`` + ``*.safetensors``), return
+        the *parent* directory instead so that ``initialize_service`` can locate
+        sibling models correctly.
+        """
+        cp = Path(self.checkpoint_dir)
+        if (cp / "config.json").exists() and any(cp.glob("*.safetensors")):
+            return cp.parent
+        return cp
+
     # ── Initialization ────────────────────────────────────────────────────
 
     def initialize(
@@ -75,6 +90,9 @@ class InferenceService:
             self.gpu_config = get_gpu_config()
         gpu_mem = get_gpu_memory_gb()
 
+        # Resolve the true checkpoints root (handles user pointing to a model subfolder)
+        cp_root = str(self._resolve_checkpoint_root())
+
         # Unload current adapter if switching models
         if self.dit_handler and hasattr(self.dit_handler, 'lora_loaded') and self.dit_handler.lora_loaded:
             self.dit_handler.unload_lora()
@@ -82,7 +100,7 @@ class InferenceService:
         # Initialize DiT handler
         self.dit_handler = AceStepHandler()
         status_msg, _ok = self.dit_handler.initialize_service(
-            project_root=self.checkpoint_dir,
+            project_root=cp_root,
             config_path=model_name,
             device="auto",
             lazy=True,  # Defer actual weight loading until first generation
@@ -96,7 +114,7 @@ class InferenceService:
         if lm_model and gpu_mem and gpu_mem >= 8:
             try:
                 lm_status, lm_ok = self.llm_handler.initialize(
-                    checkpoint_dir=self.checkpoint_dir,
+                    checkpoint_dir=cp_root,
                     lm_model_path=lm_model,
                     backend="pt",
                     device="auto",
@@ -112,13 +130,16 @@ class InferenceService:
 
     def load_model(self, model_name: str, checkpoint_path: Optional[str] = None) -> str:
         """Load or switch to a DiT model. Works for first load and switching."""
-        cp_dir = checkpoint_path or self.checkpoint_dir
+        if checkpoint_path:
+            self.checkpoint_dir = checkpoint_path
+
+        cp_root = str(self._resolve_checkpoint_root())
 
         # If not yet initialized, do a full initialize
         if not self._initialized:
             return self.initialize(
                 model_name=model_name,
-                checkpoint_dir=cp_dir,
+                checkpoint_dir=self.checkpoint_dir,
             )
 
         # Already initialized — switch model
@@ -126,7 +147,7 @@ class InferenceService:
             self.dit_handler.unload_lora()
 
         status_msg, _ok = self.dit_handler.initialize_service(
-            project_root=cp_dir,
+            project_root=cp_root,
             config_path=model_name,
             device="auto",
             lazy=True,
@@ -156,8 +177,19 @@ class InferenceService:
         available: list[ModelInfo] = []
         cp = Path(self.checkpoint_dir)
         if cp.exists():
-            for d in cp.iterdir():
+            # Determine the real scan directory.
+            # If checkpoint_dir itself IS a model folder (has config.json + model files),
+            # scan the parent instead so all sibling models are discovered.
+            scan_dir = cp
+            if (cp / "config.json").exists() and any(cp.glob("*.safetensors")):
+                scan_dir = cp.parent
+
+            for d in scan_dir.iterdir():
                 if d.is_dir() and (d / "config.json").exists():
+                    # Skip non-DiT folders (LM, VAE, captioner, embeddings)
+                    skip_keywords = ("lm-", "vae", "captioner", "embedding", "qwen")
+                    if any(kw in d.name.lower() for kw in skip_keywords):
+                        continue
                     mtype = config.detect_model_type(d.name)
                     mcaps = config.MODEL_CAPABILITIES.get(mtype, config.MODEL_CAPABILITIES["unknown"])
                     available.append(
