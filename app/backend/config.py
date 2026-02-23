@@ -7,6 +7,13 @@ import sys
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
+# Note: vector_quantize_pytorch requires meta-tensor patches for
+# transformers 5.x compatibility. The patches are applied directly to
+# residual_fsq.py and finite_scalar_quantization.py in the venv.
+# See install script for details.
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
 # Trainer import path
 # ---------------------------------------------------------------------------
 TRAINER_PATH = Path(os.environ.get("ACESTEP_TRAINER_PATH", "D:/ace-lora-trainer"))
