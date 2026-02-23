@@ -2,6 +2,10 @@ import * as RadixSelect from '@radix-ui/react-select'
 import { ChevronDown, Check } from 'lucide-react'
 import clsx from 'clsx'
 
+// Radix Select does not allow empty-string values on items.
+// We use a sentinel internally and convert back to '' for the caller.
+const EMPTY_SENTINEL = '__empty__'
+
 interface SelectOption {
   value: string
   label: string
@@ -24,6 +28,10 @@ export default function Select({
   placeholder = 'Select...',
   className,
 }: SelectProps) {
+  // Map empty values to sentinel for Radix compatibility
+  const internalValue = value === '' ? EMPTY_SENTINEL : value
+  const handleChange = (v: string) => onValueChange(v === EMPTY_SENTINEL ? '' : v)
+
   return (
     <div className={clsx('flex flex-col gap-1.5', className)}>
       {label && (
@@ -31,7 +39,7 @@ export default function Select({
           {label}
         </span>
       )}
-      <RadixSelect.Root value={value} onValueChange={onValueChange}>
+      <RadixSelect.Root value={internalValue} onValueChange={handleChange}>
         <RadixSelect.Trigger
           className={clsx(
             'inline-flex items-center justify-between',
@@ -63,24 +71,27 @@ export default function Select({
             sideOffset={4}
           >
             <RadixSelect.Viewport className="p-1">
-              {options.map((option) => (
-                <RadixSelect.Item
-                  key={option.value}
-                  value={option.value}
-                  className={clsx(
-                    'relative flex items-center h-8 px-8 text-sm rounded-[var(--radius-sm)]',
-                    'text-[var(--text-primary)] select-none',
-                    'data-[highlighted]:bg-[var(--accent-muted)] data-[highlighted]:text-[var(--text-primary)]',
-                    'data-[highlighted]:outline-none',
-                    'cursor-pointer',
-                  )}
-                >
-                  <RadixSelect.ItemIndicator className="absolute left-2 inline-flex items-center">
-                    <Check className="h-3.5 w-3.5 text-[var(--accent)]" />
-                  </RadixSelect.ItemIndicator>
-                  <RadixSelect.ItemText>{option.label}</RadixSelect.ItemText>
-                </RadixSelect.Item>
-              ))}
+              {options.map((option) => {
+                const itemValue = option.value === '' ? EMPTY_SENTINEL : option.value
+                return (
+                  <RadixSelect.Item
+                    key={itemValue}
+                    value={itemValue}
+                    className={clsx(
+                      'relative flex items-center h-8 px-8 text-sm rounded-[var(--radius-sm)]',
+                      'text-[var(--text-primary)] select-none',
+                      'data-[highlighted]:bg-[var(--accent-muted)] data-[highlighted]:text-[var(--text-primary)]',
+                      'data-[highlighted]:outline-none',
+                      'cursor-pointer',
+                    )}
+                  >
+                    <RadixSelect.ItemIndicator className="absolute left-2 inline-flex items-center">
+                      <Check className="h-3.5 w-3.5 text-[var(--accent)]" />
+                    </RadixSelect.ItemIndicator>
+                    <RadixSelect.ItemText>{option.label}</RadixSelect.ItemText>
+                  </RadixSelect.Item>
+                )
+              })}
             </RadixSelect.Viewport>
           </RadixSelect.Content>
         </RadixSelect.Portal>
