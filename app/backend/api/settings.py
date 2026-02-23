@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
 from typing import Optional
@@ -155,3 +156,45 @@ async def validate_path(body: dict):
     exists = p.exists()
     is_dir = p.is_dir() if exists else False
     return {"valid": exists, "is_dir": is_dir, "path": str(p.resolve()) if exists else path_str}
+
+
+# ── Native Folder Picker ────────────────────────────────────────────────────
+
+
+def _open_folder_dialog(title: str, initial_dir: str) -> str:
+    """Open a native OS folder picker dialog (blocking). Returns selected path or ''."""
+    import tkinter as tk
+    from tkinter import filedialog
+
+    root = tk.Tk()
+    root.withdraw()            # Hide the root window
+    root.attributes("-topmost", True)  # Ensure dialog appears on top
+    root.update()
+
+    kwargs: dict = {"title": title}
+    if initial_dir and Path(initial_dir).is_dir():
+        kwargs["initialdir"] = initial_dir
+
+    selected = filedialog.askdirectory(**kwargs)
+
+    root.destroy()
+    return selected or ""
+
+
+@router.post("/browse-folder")
+async def browse_folder(body: dict):
+    """Open a native folder picker dialog and return the selected path.
+
+    Body params:
+        title (str): Dialog window title
+        initial_dir (str): Starting directory for the dialog
+    """
+    title = body.get("title", "Select Folder")
+    initial_dir = body.get("initial_dir", "")
+
+    loop = asyncio.get_running_loop()
+    selected = await loop.run_in_executor(None, _open_folder_dialog, title, initial_dir)
+
+    if not selected:
+        return {"selected": False, "path": ""}
+    return {"selected": True, "path": selected}

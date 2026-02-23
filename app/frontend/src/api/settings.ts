@@ -40,3 +40,18 @@ export async function updateSettings(
 export async function validatePath(path: string): Promise<ValidatePathResponse> {
   return api.post<ValidatePathResponse>('/settings/validate-path', { path })
 }
+
+export interface BrowseFolderResponse {
+  selected: boolean
+  path: string
+}
+
+export async function browseFolder(
+  title?: string,
+  initialDir?: string,
+): Promise<BrowseFolderResponse> {
+  return api.post<BrowseFolderResponse>('/settings/browse-folder', {
+    title: title ?? 'Select Folder',
+    initial_dir: initialDir ?? '',
+  })
+}

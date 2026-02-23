@@ -21,13 +21,14 @@ import {
   getSettings,
   updateSettings,
   validatePath,
+  browseFolder,
   type UserSettings,
 } from '../../api/settings'
 import { getModelStatus, loadModel } from '../../api/models'
 import { useSettingsStore } from '../../stores/useSettingsStore'
 import type { ModelStatusResponse } from '../../types/api'
 
-// ── Path input with validation ──────────────────────────────────────────────
+// ── Path input with validation + native folder picker ───────────────────────
 
 interface PathInputProps {
   label: string
@@ -37,6 +38,7 @@ interface PathInputProps {
   onValidate?: (value: string) => void
   valid?: boolean | null
   validating?: boolean
+  browseTitle?: string
 }
 
 function PathInput({
@@ -47,7 +49,25 @@ function PathInput({
   onValidate,
   valid,
   validating,
+  browseTitle,
 }: PathInputProps) {
+  const [browsing, setBrowsing] = useState(false)
+
+  const handleBrowse = async () => {
+    setBrowsing(true)
+    try {
+      const result = await browseFolder(browseTitle ?? `Select ${label}`, value)
+      if (result.selected && result.path) {
+        onChange(result.path)
+        onValidate?.(result.path)
+      }
+    } catch (err) {
+      console.error('Browse folder failed:', err)
+    } finally {
+      setBrowsing(false)
+    }
+  }
+
   return (
     <div className="flex flex-col gap-1.5">
       <label className="text-sm font-medium text-[var(--text-primary)]">
@@ -60,7 +80,7 @@ function PathInput({
             value={value}
             onChange={(e) => onChange(e.target.value)}
             onBlur={() => onValidate?.(value)}
-            placeholder="Enter path..."
+            placeholder="Enter path or click Browse..."
             className="font-mono text-sm pr-8"
           />
           {validating && (
@@ -74,15 +94,24 @@ function PathInput({
           )}
         </div>
         <button
-          onClick={() => onValidate?.(value)}
-          title="Validate path"
+          onClick={handleBrowse}
+          disabled={browsing}
+          title="Browse folder"
           className={clsx(
-            'p-2 rounded-[var(--radius)]',
-            'text-[var(--text-muted)] hover:text-[var(--text-primary)]',
-            'hover:bg-[var(--bg-hover)] transition-colors',
+            'flex items-center gap-1.5 px-3 py-2 rounded-[var(--radius)]',
+            'text-sm font-medium transition-colors',
+            'border border-[var(--border)]',
+            browsing
+              ? 'text-[var(--text-muted)] bg-[var(--bg-tertiary)] cursor-wait'
+              : 'text-[var(--text-secondary)] bg-[var(--bg-secondary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]',
           )}
         >
-          <FolderOpen className="h-4 w-4" />
+          {browsing ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <FolderOpen className="h-4 w-4" />
+          )}
+          Browse
         </button>
       </div>
       {!validating && valid === false && (
@@ -90,6 +119,96 @@ function PathInput({
           Path does not exist or is not accessible
         </span>
       )}
+    </div>
+  )
+}
+
+// ── LoRA path row with browse + validation + remove ─────────────────────────
+
+interface LoraPathRowProps {
+  value: string
+  onChange: (value: string) => void
+  onValidate: (value: string) => void
+  onRemove: () => void
+  valid?: boolean | null
+  validating?: boolean
+}
+
+function LoraPathRow({
+  value,
+  onChange,
+  onValidate,
+  onRemove,
+  valid,
+  validating: isValidating,
+}: LoraPathRowProps) {
+  const [browsing, setBrowsing] = useState(false)
+
+  const handleBrowse = async () => {
+    setBrowsing(true)
+    try {
+      const result = await browseFolder('Select LoRA / LoKr Folder', value)
+      if (result.selected && result.path) {
+        onChange(result.path)
+        onValidate(result.path)
+      }
+    } catch (err) {
+      console.error('Browse folder failed:', err)
+    } finally {
+      setBrowsing(false)
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      <div className="relative flex-1">
+        <Input
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onBlur={() => onValidate(value)}
+          placeholder="Enter path or click Browse..."
+          className="font-mono text-sm pr-8"
+        />
+        {isValidating && (
+          <Loader2 className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-[var(--text-muted)] animate-spin" />
+        )}
+        {!isValidating && valid === true && (
+          <CheckCircle2 className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-[var(--success)]" />
+        )}
+        {!isValidating && valid === false && (
+          <AlertCircle className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-[var(--error)]" />
+        )}
+      </div>
+      <button
+        onClick={handleBrowse}
+        disabled={browsing}
+        title="Browse folder"
+        className={clsx(
+          'flex items-center gap-1.5 px-3 py-2 rounded-[var(--radius)]',
+          'text-sm font-medium transition-colors',
+          'border border-[var(--border)]',
+          browsing
+            ? 'text-[var(--text-muted)] bg-[var(--bg-tertiary)] cursor-wait'
+            : 'text-[var(--text-secondary)] bg-[var(--bg-secondary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]',
+        )}
+      >
+        {browsing ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : (
+          <FolderOpen className="h-4 w-4" />
+        )}
+      </button>
+      <button
+        onClick={onRemove}
+        title="Remove path"
+        className={clsx(
+          'p-2 rounded-[var(--radius)]',
+          'text-[var(--text-muted)] hover:text-[var(--error)]',
+          'hover:bg-[var(--error)]/10 transition-colors',
+        )}
+      >
+        <Trash2 className="h-4 w-4" />
+      </button>
     </div>
   )
 }
@@ -432,37 +551,15 @@ export default function SettingsPage() {
           )}
 
           {loraPaths.map((path, index) => (
-            <div key={index} className="flex items-center gap-2">
-              <div className="relative flex-1">
-                <Input
-                  value={path}
-                  onChange={(e) => updateLoraPath(index, e.target.value)}
-                  onBlur={() => handleValidate(`lora_${index}`, path)}
-                  placeholder="Enter LoRA/LoKr folder path..."
-                  className="font-mono text-sm pr-8"
-                />
-                {validating[`lora_${index}`] && (
-                  <Loader2 className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-[var(--text-muted)] animate-spin" />
-                )}
-                {!validating[`lora_${index}`] && validation[`lora_${index}`] === true && (
-                  <CheckCircle2 className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-[var(--success)]" />
-                )}
-                {!validating[`lora_${index}`] && validation[`lora_${index}`] === false && (
-                  <AlertCircle className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-[var(--error)]" />
-                )}
-              </div>
-              <button
-                onClick={() => removeLoraPath(index)}
-                title="Remove path"
-                className={clsx(
-                  'p-2 rounded-[var(--radius)]',
-                  'text-[var(--text-muted)] hover:text-[var(--error)]',
-                  'hover:bg-[var(--error)]/10 transition-colors',
-                )}
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
-            </div>
+            <LoraPathRow
+              key={index}
+              value={path}
+              onChange={(v) => updateLoraPath(index, v)}
+              onValidate={(v) => handleValidate(`lora_${index}`, v)}
+              onRemove={() => removeLoraPath(index)}
+              valid={validation[`lora_${index}`]}
+              validating={validating[`lora_${index}`]}
+            />
           ))}
         </div>
       </Card>
