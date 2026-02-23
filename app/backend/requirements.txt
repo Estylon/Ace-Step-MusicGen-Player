@@ -1,13 +1,33 @@
+# ── Backend server ───────────────────────────────────────────────────
 fastapi>=0.115.0
 uvicorn[standard]>=0.30.0
 aiosqlite>=0.20.0
 python-multipart>=0.0.9
 sse-starlette>=2.0.0
 pydantic>=2.0
+
+# ── Audio processing ────────────────────────────────────────────────
 numpy
 librosa>=0.10.0
 soundfile>=0.12.0
+scipy>=1.10.0
 
-# Stem separation — installed separately in install script
+# ── ACE-Step inference dependencies ─────────────────────────────────
+# These are needed because we import from the ACE-Step trainer
+# (D:\ace-lora-trainer) which expects these packages.
+tqdm
+transformers>=4.51.0
+diffusers
+accelerate>=1.12.0
+peft>=0.7.0
+einops>=0.8.1
+safetensors>=0.4.0
+loguru>=0.7.3
+pyyaml
+
+# ── LoRA/LoKr adapter support ──────────────────────────────────────
+lycoris-lora>=2.0.0
+
+# ── Stem separation — installed separately in install script ────────
 # due to diffq-fixed Cython build issues on Python 3.13+
 # audio-separator[gpu]>=0.30.0
