@@ -59,12 +59,29 @@ class InferenceService:
         """Return the real checkpoints root directory.
 
         If ``self.checkpoint_dir`` accidentally points to a single model folder
-        (i.e. it directly contains ``config.json`` + ``*.safetensors``), return
+        (i.e. it directly contains ``config.json`` and model weight files), return
         the *parent* directory instead so that ``initialize_service`` can locate
         sibling models correctly.
         """
         cp = Path(self.checkpoint_dir)
-        if (cp / "config.json").exists() and any(cp.glob("*.safetensors")):
+        if not cp.exists():
+            return cp
+
+        # A model folder has config.json + weight files (safetensors or bin)
+        has_config = (cp / "config.json").exists()
+        has_weights = (
+            any(cp.glob("*.safetensors"))
+            or any(cp.glob("model.safetensors.*"))  # sharded
+            or (cp / "pytorch_model.bin").exists()
+        )
+        # Also check: if the name looks like a model name (e.g. "acestep-v15-turbo")
+        # and the parent contains sibling model folders
+        looks_like_model = has_config and (
+            has_weights
+            or "acestep" in cp.name.lower()
+        )
+
+        if looks_like_model:
             return cp.parent
         return cp
 
@@ -98,12 +115,16 @@ class InferenceService:
             self.dit_handler.unload_lora()
 
         # Initialize DiT handler
+        # NOTE: The handler's _get_project_root() always returns the trainer dir
+        # (based on handler.py file location), so we pass the user's checkpoints
+        # root via custom_checkpoint_dir to override where models are loaded from.
         self.dit_handler = AceStepHandler()
         status_msg, _ok = self.dit_handler.initialize_service(
             project_root=cp_root,
             config_path=model_name,
             device="auto",
             lazy=True,  # Defer actual weight loading until first generation
+            custom_checkpoint_dir=cp_root,
         )
         self.current_model_name = model_name
         self.current_model_type = config.detect_model_type(model_name)
@@ -151,6 +172,7 @@ class InferenceService:
             config_path=model_name,
             device="auto",
             lazy=True,
+            custom_checkpoint_dir=cp_root,
         )
         self.current_model_name = model_name
         self.current_model_type = config.detect_model_type(model_name)
@@ -177,12 +199,8 @@ class InferenceService:
         available: list[ModelInfo] = []
         cp = Path(self.checkpoint_dir)
         if cp.exists():
-            # Determine the real scan directory.
-            # If checkpoint_dir itself IS a model folder (has config.json + model files),
-            # scan the parent instead so all sibling models are discovered.
-            scan_dir = cp
-            if (cp / "config.json").exists() and any(cp.glob("*.safetensors")):
-                scan_dir = cp.parent
+            # Use the same resolution logic to find the real checkpoints root
+            scan_dir = self._resolve_checkpoint_root()
 
             for d in scan_dir.iterdir():
                 if d.is_dir() and (d / "config.json").exists():
@@ -332,8 +350,10 @@ class InferenceService:
 
         return None
 
-    def _infer_base_model_type(self, model_ref: str) -> str:
+    def _infer_base_model_type(self, model_ref: Optional[str]) -> str:
         """Infer the model type from a reference string (path or name)."""
+        if not model_ref:
+            return "unknown"
         ref_lower = model_ref.lower()
         if "turbo" in ref_lower:
             return "turbo"
