@@ -249,6 +249,9 @@ class InferenceService:
         self._adapter_search_paths: list[str] = list(config.DEFAULT_ADAPTER_SEARCH_PATHS)
         self._cached_adapters: list[AdapterInfo] = []
 
+        # LM model name tracking (LLMHandler doesn't store this itself)
+        self._lm_model_name: str = ""
+
     # ── GPU Detection (lightweight, no model download) ──────────────────
 
     def detect_gpu(self):
@@ -348,6 +351,8 @@ class InferenceService:
                     backend="pt",
                     device="auto",
                 )
+                if lm_ok:
+                    self._lm_model_name = lm_model
                 status_msg += f" | LM: {lm_status}"
             except Exception as e:
                 status_msg += f" | LM failed: {e}"
@@ -483,13 +488,16 @@ class InferenceService:
                     ),
                     compute_capability=f"{props.major}.{props.minor}",
                 )
-        except Exception:
-            pass
+            else:
+                gpu_info = GPUInfo(name="No CUDA GPU")
+        except Exception as e:
+            print(f"[InferenceService] GPU status query failed: {e}")
+            gpu_info = GPUInfo(name=f"Error: {type(e).__name__}")
 
-        # LM info
+        # LM info — LLMHandler doesn't store model name, so we track it ourselves
         lm_info = LMInfo(
-            loaded=bool(self.llm_handler and self.llm_handler.llm_initialized),
-            model=getattr(self.llm_handler, "_model_name", "") if self.llm_handler else "",
+            loaded=bool(self.llm_handler and getattr(self.llm_handler, "llm_initialized", False)),
+            model=self._lm_model_name,
         )
         if self.gpu_config:
             lm_info.available_models = getattr(self.gpu_config, "available_lm_models", [])
