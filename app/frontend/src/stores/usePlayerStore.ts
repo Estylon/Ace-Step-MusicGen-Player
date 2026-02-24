@@ -1,5 +1,12 @@
 import { create } from 'zustand'
 import type { TrackInfo } from '../types'
+import {
+  loadTrack,
+  playAudio,
+  pauseAudio,
+  seekAudio,
+  setAudioVolume,
+} from '../lib/audioEngine'
 
 type RepeatMode = 'none' | 'all' | 'one'
 
@@ -38,8 +45,13 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   shuffle: false,
 
   play: (track) => {
-    const { queue } = get()
-    // Check if the track is already in the queue
+    const { queue, volume } = get()
+
+    // Load + play via audio engine
+    loadTrack(track.audio_url)
+    setAudioVolume(volume)
+    playAudio()
+
     const existingIndex = queue.findIndex((t) => t.id === track.id)
     if (existingIndex >= 0) {
       set({
@@ -50,7 +62,6 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         queueIndex: existingIndex,
       })
     } else {
-      // Add to end of queue and play
       const newQueue = [...queue, track]
       set({
         currentTrack: track,
@@ -64,36 +75,43 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   },
 
   pause: () => {
+    pauseAudio()
     set({ isPlaying: false })
   },
 
   resume: () => {
+    const { volume } = get()
+    setAudioVolume(volume)
+    playAudio()
     set({ isPlaying: true })
   },
 
   seek: (time) => {
+    seekAudio(time)
     set({ currentTime: time })
   },
 
   setVolume: (v) => {
-    set({ volume: Math.max(0, Math.min(1, v)) })
+    const clamped = Math.max(0, Math.min(1, v))
+    setAudioVolume(clamped)
+    set({ volume: clamped })
   },
 
   next: () => {
-    const { queue, queueIndex, repeatMode, shuffle } = get()
+    const { queue, queueIndex, repeatMode, shuffle, volume } = get()
     if (queue.length === 0) return
 
-    let nextIndex: number
-
     if (repeatMode === 'one') {
-      // Replay current track
-      nextIndex = queueIndex
+      // Replay current track from the start
+      seekAudio(0)
+      playAudio()
       set({ currentTime: 0, isPlaying: true })
       return
     }
 
+    let nextIndex: number
+
     if (shuffle) {
-      // Pick a random different index
       if (queue.length === 1) {
         nextIndex = 0
       } else {
@@ -109,13 +127,16 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       if (repeatMode === 'all') {
         nextIndex = 0
       } else {
-        // End of queue, stop playing
+        pauseAudio()
         set({ isPlaying: false })
         return
       }
     }
 
     const nextTrack = queue[nextIndex]
+    loadTrack(nextTrack.audio_url)
+    setAudioVolume(volume)
+    playAudio()
     set({
       currentTrack: nextTrack,
       isPlaying: true,
@@ -126,11 +147,12 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   },
 
   prev: () => {
-    const { queue, queueIndex, currentTime, repeatMode, shuffle } = get()
+    const { queue, queueIndex, currentTime, repeatMode, shuffle, volume } = get()
     if (queue.length === 0) return
 
     // If more than 3 seconds in, restart current track
     if (currentTime > 3) {
+      seekAudio(0)
       set({ currentTime: 0 })
       return
     }
@@ -153,13 +175,16 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       if (repeatMode === 'all') {
         prevIndex = queue.length - 1
       } else {
-        // Beginning of queue, restart current track
+        seekAudio(0)
         set({ currentTime: 0 })
         return
       }
     }
 
     const prevTrack = queue[prevIndex]
+    loadTrack(prevTrack.audio_url)
+    setAudioVolume(volume)
+    playAudio()
     set({
       currentTrack: prevTrack,
       isPlaying: true,

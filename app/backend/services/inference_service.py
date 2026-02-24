@@ -180,6 +180,31 @@ def _fix_fsq_buffers_after_load(model) -> int:
                 print(f"  [RFSQ FIX] {name}: FIXED scales, "
                       f"codebook_size={module.codebook_size}")
 
+            # ── Fix dtype mismatch in get_output_from_indices ─────────
+            # The codebook lookup produces float32, but project_out may be
+            # bfloat16 (model loaded in bf16).  Monkeypatch to cast before
+            # the linear projection so we don't get "mat1 and mat2 must
+            # have the same dtype" errors.
+            project_out = getattr(module, "project_out", None)
+            if project_out is not None:
+                proj_dtype = next(project_out.parameters()).dtype
+                if proj_dtype != torch.float32:
+                    _orig_get_output = module.get_output_from_indices
+
+                    def _patched_get_output(indices, _mod=module, _orig=_orig_get_output):
+                        codes = _mod.get_codes_from_indices(indices)
+                        # reduce over quantizer dim (first dim)
+                        from einops import reduce as einops_reduce
+                        codes_summed = einops_reduce(codes, 'q ... -> ...', 'sum')
+                        # Cast to project_out dtype before linear layer
+                        proj_dt = next(_mod.project_out.parameters()).dtype
+                        codes_summed = codes_summed.to(proj_dt)
+                        return _mod.project_out(codes_summed)
+
+                    module.get_output_from_indices = _patched_get_output
+                    print(f"  [RFSQ FIX] {name}: patched get_output_from_indices "
+                          f"for dtype cast (float32 → {proj_dtype})")
+
     return fixed
 
 
@@ -395,23 +420,99 @@ class InferenceService:
                     print("[InferenceService] FSQ health check PASSED")
                 else:
                     print("[InferenceService] FSQ health check FAILED — audio may be silent!")
+
+                # ── Promote VAE to float32 for better decode quality ──────
+                # bfloat16 VAE produces extremely quiet output (rms ~0.001)
+                # that requires 300x+ gain, amplifying quantization noise.
+                # float32 preserves precision at low amplitudes.
+                import torch
+                vae = getattr(handler, "vae", None)
+                if vae is not None:
+                    vae_dtype = next(vae.parameters()).dtype
+                    if vae_dtype != torch.float32:
+                        handler.vae = vae.float()
+                        print(f"[InferenceService] VAE promoted to float32 "
+                              f"(was {vae_dtype}) for better audio quality")
+                    else:
+                        print(f"[InferenceService] VAE already float32")
+
                 print("=" * 60)
 
         handler.ensure_models_loaded = _patched_ensure_models_loaded
 
     # ── Model Management ──────────────────────────────────────────────────
 
+    def _detect_and_get_lm_model(self) -> str:
+        """Auto-detect the best LM model from the checkpoint directory.
+
+        Uses the resolved checkpoint root and available VRAM to pick
+        the largest LM model that fits.  Returns the model folder name
+        or ``""`` if none found.
+        """
+        cp_root = self._resolve_checkpoint_root()
+        available_vram = 0.0
+        try:
+            from acestep.gpu_config import get_gpu_memory_gb
+            available_vram = get_gpu_memory_gb() or 0.0
+        except Exception:
+            pass
+        return config.detect_best_lm_model(cp_root, available_vram)
+
+    def _ensure_lm_loaded(self) -> str:
+        """Make sure the LLM is loaded.  If not, auto-detect and load it.
+
+        Returns a status string describing what happened.
+        """
+        # Already loaded?
+        if self.llm_handler and getattr(self.llm_handler, "llm_initialized", False):
+            return f"LM already loaded: {self._lm_model_name}"
+
+        lm_model = self._detect_and_get_lm_model()
+        if not lm_model:
+            return "No LM model found in checkpoint directory"
+
+        cp_root = str(self._resolve_checkpoint_root())
+
+        from acestep.llm_inference import LLMHandler
+        if not self.llm_handler:
+            self.llm_handler = LLMHandler()
+
+        try:
+            print(f"[InferenceService] Auto-loading LM model: {lm_model}")
+            lm_status, lm_ok = self.llm_handler.initialize(
+                checkpoint_dir=cp_root,
+                lm_model_path=lm_model,
+                backend="pt",
+                device="auto",
+            )
+            if lm_ok:
+                self._lm_model_name = lm_model
+                print(f"[InferenceService] LM loaded successfully: {lm_model}")
+                return f"LM loaded: {lm_status}"
+            else:
+                print(f"[InferenceService] LM load failed: {lm_status}")
+                return f"LM failed: {lm_status}"
+        except Exception as e:
+            print(f"[InferenceService] LM load exception: {e}")
+            return f"LM exception: {e}"
+
     def load_model(self, model_name: str, checkpoint_path: Optional[str] = None) -> str:
-        """Load or switch to a DiT model. Works for first load and switching."""
+        """Load or switch to a DiT model. Works for first load and switching.
+
+        Also auto-loads the LLM if not already loaded (required for quality
+        audio generation).
+        """
         if checkpoint_path:
             self.checkpoint_dir = checkpoint_path
 
         cp_root = str(self._resolve_checkpoint_root())
 
-        # If not yet initialized, do a full initialize
+        # If not yet initialized, do a full initialize WITH LM auto-detect
         if not self._initialized:
+            lm_model = self._detect_and_get_lm_model()
             return self.initialize(
                 model_name=model_name,
+                lm_model=lm_model or None,
                 checkpoint_dir=self.checkpoint_dir,
             )
 
@@ -429,6 +530,11 @@ class InferenceService:
         self._wrap_ensure_models_loaded()
         self.current_model_name = model_name
         self.current_model_type = config.detect_model_type(model_name)
+
+        # Also ensure LM is loaded (auto-detect if needed)
+        lm_status = self._ensure_lm_loaded()
+        status_msg += f" | {lm_status}"
+
         return status_msg
 
     def get_model_status(self) -> ModelStatusResponse:
@@ -479,12 +585,14 @@ class InferenceService:
             import torch
             if torch.cuda.is_available():
                 props = torch.cuda.get_device_properties(0)
+                # PyTorch 2.7+ renamed total_mem → total_memory
+                total_mem = getattr(props, "total_memory", None) or getattr(props, "total_mem", 0)
                 gpu_info = GPUInfo(
                     tier=self.gpu_config.tier if self.gpu_config else "unknown",
                     name=props.name,
-                    vram_total_gb=round(props.total_mem / (1024**3), 1),
+                    vram_total_gb=round(total_mem / (1024**3), 1),
                     vram_free_gb=round(
-                        (props.total_mem - torch.cuda.memory_allocated(0)) / (1024**3), 1
+                        (total_mem - torch.cuda.memory_allocated(0)) / (1024**3), 1
                     ),
                     compute_capability=f"{props.major}.{props.minor}",
                 )
@@ -492,6 +600,7 @@ class InferenceService:
                 gpu_info = GPUInfo(name="No CUDA GPU")
         except Exception as e:
             print(f"[InferenceService] GPU status query failed: {e}")
+            import traceback; traceback.print_exc()
             gpu_info = GPUInfo(name=f"Error: {type(e).__name__}")
 
         # LM info — LLMHandler doesn't store model name, so we track it ourselves
@@ -499,8 +608,16 @@ class InferenceService:
             loaded=bool(self.llm_handler and getattr(self.llm_handler, "llm_initialized", False)),
             model=self._lm_model_name,
         )
+        # Populate available LM models from gpu_config or by scanning checkpoints
         if self.gpu_config:
             lm_info.available_models = getattr(self.gpu_config, "available_lm_models", [])
+        if not lm_info.available_models:
+            # Fallback: scan checkpoint directory for LM folders
+            scan_dir = self._resolve_checkpoint_root()
+            if scan_dir.exists():
+                for d in scan_dir.iterdir():
+                    if d.is_dir() and "lm" in d.name.lower() and "5hz" in d.name.lower():
+                        lm_info.available_models.append(d.name)
 
         return ModelStatusResponse(
             current_model=current,
@@ -620,10 +737,26 @@ class InferenceService:
         return "unknown"
 
     def load_adapter(self, path: str, scale: float = 1.0) -> str:
-        """Load a LoRA/LoKr adapter."""
+        """Load a LoRA/LoKr adapter.
+
+        Automatically triggers lazy model loading if needed (the model is
+        initialized with lazy=True and weights haven't been loaded yet).
+        """
         if not self.dit_handler:
-            return "Model not loaded"
+            raise RuntimeError("Model handler not initialised — load a model first")
+
+        # Ensure the DiT model weights are actually loaded (lazy init).
+        # load_lora needs self.model to be non-None.
+        if not getattr(self.dit_handler, '_models_loaded', False):
+            print("[InferenceService] Model weights not yet loaded — triggering lazy load for adapter...")
+            self.dit_handler.ensure_models_loaded()
+
         result = self.dit_handler.load_lora(path)
+
+        # Raise on error so the HTTP endpoint can return a proper status code
+        if result and ("❌" in result or "error" in result.lower() or "failed" in result.lower()):
+            raise RuntimeError(result)
+
         if scale != 1.0:
             self.dit_handler.set_lora_scale(scale)
         return result
@@ -683,6 +816,14 @@ class InferenceService:
             except ValueError:
                 pass
 
+        # Apply model-specific defaults for shift if the request uses the
+        # generic default (1.0).  Turbo models REQUIRE shift=3.0.
+        effective_shift = request.shift
+        if effective_shift == 1.0 and self.current_model_type == "turbo":
+            caps = config.MODEL_CAPABILITIES.get("turbo", {})
+            effective_shift = caps.get("shift_default", 3.0)
+            print(f"[InferenceService] Auto-applied turbo shift: {effective_shift}")
+
         params = GenerationParams(
             caption=request.caption,
             lyrics=request.lyrics,
@@ -698,7 +839,7 @@ class InferenceService:
             use_adg=request.use_adg,
             cfg_interval_start=request.cfg_interval_start,
             cfg_interval_end=request.cfg_interval_end,
-            shift=request.shift,
+            shift=effective_shift,
             infer_method=request.infer_method,
             timesteps=timesteps_list,
             task_type=request.task_type,

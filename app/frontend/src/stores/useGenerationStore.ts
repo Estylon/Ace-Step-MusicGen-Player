@@ -2,6 +2,8 @@ import { create } from 'zustand'
 import type { GenerateRequest } from '../types/api'
 import type { GenerationJob, TrackInfo } from '../types'
 import { createGeneration, subscribeToProgress } from '../api/generate'
+import { parsePreset, exportPreset, type ImportResult, type ExportOptions } from '../lib/presetIO'
+import { useSettingsStore } from './useSettingsStore'
 
 interface GenerationState {
   form: GenerateRequest
@@ -9,8 +11,12 @@ interface GenerationState {
   results: TrackInfo[]
 
   updateForm: (partial: Partial<GenerateRequest>) => void
+  importPreset: (jsonInput: string | Record<string, unknown>) => ImportResult
+  exportPreset: (options?: ExportOptions) => string
+  resetForm: () => void
   generate: () => Promise<void>
   clearResults: () => void
+  updateTrackTitle: (trackId: string, newTitle: string) => void
 }
 
 const defaultForm: GenerateRequest = {
@@ -63,10 +69,34 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
     }))
   },
 
+  importPreset: (jsonInput) => {
+    const result = parsePreset(jsonInput)
+    set(() => ({
+      form: { ...defaultForm, ...result.formUpdate },
+    }))
+    return result
+  },
+
+  exportPreset: (options) => {
+    const { form } = get()
+    return exportPreset(form, options)
+  },
+
+  resetForm: () => {
+    set({ form: { ...defaultForm } })
+  },
+
   generate: async () => {
     const { form } = get()
+
+    // Prepend the active adapter's style tag (trigger word) to the caption
+    const styleTag = useSettingsStore.getState().getActiveStyleTag()
+    const effectiveCaption =
+      styleTag && form.caption ? `${styleTag} ${form.caption}` : form.caption
+    const payload = { ...form, caption: effectiveCaption }
+
     try {
-      const { job_id } = await createGeneration(form)
+      const { job_id } = await createGeneration(payload)
 
       // Add the job to active jobs
       const job: GenerationJob = {
@@ -135,5 +165,13 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
 
   clearResults: () => {
     set({ results: [] })
+  },
+
+  updateTrackTitle: (trackId, newTitle) => {
+    set((state) => ({
+      results: state.results.map((t) =>
+        t.id === trackId ? { ...t, title: newTitle } : t,
+      ),
+    }))
   },
 }))

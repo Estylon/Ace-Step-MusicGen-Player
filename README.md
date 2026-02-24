@@ -1,20 +1,67 @@
 # ACE-Step MusicGen Player
 
-Premium music generation and stem separation application powered by **ACE-Step 1.5**. Features a Dark Pro Studio interface built with React, full control over all inference parameters, intelligent LoRA/LoKr adapter management, and high-quality stem separation using BS-RoFormer + Demucs.
+> A music generation player built around **my** workflow, **my** tastes, and **my** needs — shared for anyone who finds it useful.
+
+I created this project because I wanted a dedicated interface to generate music with ACE-Step that didn't feel like a lab notebook. Something with a proper player, real-time waveform visualization, full control over every parameter, and tight integration with my standalone LoRA trainer. This is that tool.
+
+It's opinionated — designed to pair with [my ACE-Step LoRA Trainer](https://github.com/Estylon/ace-lora-trainer) and optimized for the kind of iterative, adapter-driven workflow I use daily. If your setup looks anything like mine (local checkpoints, a pile of LoRAs, and a GPU that never sleeps), you might find this useful too.
 
 ---
 
-## Features
+## What It Does
 
-- **Full ACE-Step Inference** — All 6 task types (text2music, cover, repaint, extract, lego, complete), turbo and base models, Chain-of-Thought language model integration
-- **Smart Model Switching** — Visual model selector showing capabilities per model type (turbo: 8 steps/fast, base: full CFG/all tasks, SFT: fine-tuned variants)
-- **LoRA/LoKr Adapter Management** — Auto-detection of adapter compatibility with the loaded model, one-click "Switch & Load" for incompatible adapters, real-time scale adjustment, active/inactive toggle
-- **Stem Separation** — BS-RoFormer (SDR 12.97 vocal isolation) + Demucs htdemucs_ft (4-stem) + two-pass mode combining both for best quality
-- **Multi-Track Player** — Synchronized waveform playback with per-stem solo/mute/volume controls
-- **Generation Library** — SQLite-backed history with search, sort, and full metadata
-- **Real-Time Progress** — Server-Sent Events for live generation and separation progress
-- **Adaptive UI** — Controls automatically adapt based on loaded model capabilities and GPU tier
-- **Customizable Paths** — All model, checkpoint, LoRA, and output paths are configurable through the Settings page
+**ACE-Step MusicGen Player** is a full-stack application (FastAPI + React) for generating, playing, and managing AI music powered by [ACE-Step 1.5](https://github.com/ace-step/ACE-Step).
+
+### Core
+
+- **All 6 ACE-Step task types** — text2music, cover, repaint, extract, lego, complete
+- **Turbo & Base models** with smart capability detection — UI adapts automatically to the loaded model
+- **Chain-of-Thought language model** integration for auto-BPM, key detection, and caption enhancement
+- **Batch generation** — up to 8 variations per run with independent seeds
+- **Real-time progress** via Server-Sent Events
+
+### LoRA / LoKr Adapter System
+
+- **Auto-detection** of PEFT LoRA and LyCORIS LoKr adapters across multiple directories
+- **Compatibility grouping** — adapters tagged as compatible or requiring a model switch
+- **One-click Switch & Load** — automatically swaps the base model and loads the adapter
+- **Real-time scale adjustment** (0.0 – 2.0) and active/inactive toggle for instant A/B comparison
+- **Style tags / trigger words** — assign a trigger word to any adapter that gets automatically prepended to your caption at generation time. Set it once, forget it.
+- **Lazy-load aware** — adapters load correctly even if the model hasn't been used yet (automatic weight initialization)
+
+### Player & Audio
+
+- **Real audio engine** — HTMLAudioElement + Web Audio API with AnalyserNode for frequency analysis
+- **Spotify-style player bar** — seek bar, transport controls (shuffle, prev, play, next, repeat), volume with mute, time display
+- **Real-time audio visualizer** — canvas-based frequency bars with purple gradient, driven by the AnalyserNode
+- **Premium result cards** — animated waveform with playback progress overlay, editable track titles, play state badges
+- **Track naming** — name your tracks before generation or edit titles inline after
+
+### Stem Separation
+
+- **BS-RoFormer** (SDR 12.97 vocal isolation) + **Demucs htdemucs_ft** (4-stem)
+- **Two-pass mode** combining both for best quality
+- **Multi-track player** with per-stem solo/mute/volume and synchronized playback
+
+### Library & Settings
+
+- **SQLite-backed generation library** with search, sort, and full metadata
+- **Customizable paths** — all model, checkpoint, LoRA, and output directories configurable through the UI
+- **Native OS folder picker** for all path settings
+- **Persistent settings** across sessions
+
+---
+
+## Designed For My LoRA Trainer
+
+This player is purpose-built to work alongside [**ace-lora-trainer**](https://github.com/Estylon/ace-lora-trainer), my standalone ACE-Step LoRA/LoKr training tool. The integration is tight:
+
+- Point the player at your trainer's `checkpoints/` directory and it discovers all models automatically
+- Point it at your `output/` directory and it finds all trained adapters
+- Adapter compatibility with the currently loaded model is checked automatically
+- The **style tag** system lets you assign trigger words to each LoRA, so they're always prepended when that adapter is active — no more forgetting the trigger word
+
+You can use this player without the trainer (just point it at any ACE-Step checkpoint), but the two are designed to complement each other.
 
 ---
 
@@ -25,7 +72,7 @@ Premium music generation and stem separation application powered by **ACE-Step 1
 | **Python** | 3.10+ | Required |
 | **Node.js** | 18+ | Required for frontend build |
 | **NVIDIA GPU** | CUDA-capable | Recommended. CPU works but is very slow |
-| **ACE-Step Trainer** | Latest | Your local ACE-Step trainer installation |
+| **ACE-Step checkpoints** | v1.5 | Turbo, Base, or SFT |
 
 ---
 
@@ -34,64 +81,58 @@ Premium music generation and stem separation application powered by **ACE-Step 1
 ### Windows
 
 ```bash
-# 1. Clone this repository
 git clone https://github.com/Estylon/Ace-Step-MusicGen-Player.git
 cd Ace-Step-MusicGen-Player
 
-# 2. Install (creates venv, installs Python & Node deps, builds frontend)
+# Install (creates venv, installs all deps, builds frontend)
 install.bat
 
-# 3. Start the application
+# Start
 start.bat
 ```
-
-The app will open at **http://127.0.0.1:3456**
 
 ### Linux / macOS
 
 ```bash
-# 1. Clone
 git clone https://github.com/Estylon/Ace-Step-MusicGen-Player.git
 cd Ace-Step-MusicGen-Player
 
-# 2. Install
 chmod +x scripts/*.sh
 ./scripts/install.sh
 cd app/frontend && npm run build && cd ../..
 
-# 3. Start
 ./scripts/start.sh
 ```
+
+The app opens at **http://127.0.0.1:3456**.
 
 ### Development Mode (Hot Reload)
 
 ```bash
-# Windows — opens two terminals: FastAPI with reload + Vite HMR
+# Windows — opens FastAPI with reload + Vite HMR
 scripts\dev.bat
 ```
 
-The Vite dev server runs at `http://localhost:5173` and proxies API calls to the backend on port 3456.
+Vite dev server runs at `http://localhost:5173` and proxies API calls to the backend on port 3456.
 
 ---
 
 ## First-Time Setup
 
-After installation, go to the **Settings** page to configure your paths:
+After installation, go to **Settings** (gear icon in the sidebar):
 
-1. **ACE-Step Trainer Path** — Point to your local ACE-Step trainer directory (e.g. `D:\ace-lora-trainer`)
-2. **Checkpoint Directory** — The folder containing your model checkpoints (usually `{trainer}/checkpoints`)
-3. **LoRA Search Paths** — Add one or more folders where your LoRA/LoKr adapters are stored
-4. **Output Directories** — Optionally change where generated audio and separated stems are saved
+1. **ACE-Step Trainer Path** — root of your ACE-Step trainer installation (e.g. `D:\ace-lora-trainer`)
+2. **Checkpoint Directory** — folder containing model checkpoints (usually `{trainer}/checkpoints`)
+3. **LoRA Search Paths** — directories where your LoRA/LoKr adapters live. Add as many as you need.
+4. **Output Directories** — optionally change where generated audio and separated stems are saved
 
-All settings are persisted and automatically loaded on startup.
+All settings persist automatically.
 
 ---
 
 ## Configuration
 
 ### Environment Variables
-
-These can override the saved settings and are useful for command-line control:
 
 | Variable | Default | Description |
 |---|---|---|
@@ -117,40 +158,36 @@ start.bat --port 8080 --host 0.0.0.0 --model acestep-v15-base --lm acestep-5Hz-l
 |---|---|---|---|---|
 | `acestep-v15-turbo` | Turbo | 8 | No | text2music, cover, repaint |
 | `acestep-v15-turbo-shift3` | Turbo | 8 | No | text2music, cover, repaint |
-| `acestep-v15-base` | Base | 32-100 | Yes | All 6 tasks |
-| `acestep-v15-sft` | SFT | 32-100 | Yes | All 6 tasks |
+| `acestep-v15-base` | Base | 32–100 | Yes | All 6 tasks |
+| `acestep-v15-sft` | SFT | 32–100 | Yes | All 6 tasks |
 | Custom checkpoints | Auto-detect | Varies | Varies | Varies |
 
-### Model Capabilities
-
-- **Turbo**: Fastest generation (~8 steps). Limited to text2music, cover, and repaint tasks. No CFG support.
-- **Base**: Full quality with Classifier-Free Guidance. Supports all 6 task types including extract, lego, and complete.
-- **SFT**: Supervised fine-tuned variant with enhanced quality. Same capabilities as base.
-- **Custom**: User fine-tuned checkpoints are auto-detected and their type is inferred from the name or config.
+- **Turbo**: Fastest (~8 steps). Limited tasks, no CFG.
+- **Base**: Full quality with Classifier-Free Guidance. All 6 task types.
+- **SFT**: Supervised fine-tuned. Same capabilities as Base with enhanced quality.
+- **Custom**: Your fine-tuned checkpoints are auto-detected.
 
 ---
 
 ## LoRA / LoKr Adapters
 
-The adapter system automatically detects and manages LoRA and LoKr adapters:
-
-- **Auto-Detection**: Scans configured directories for `adapter_config.json` (PEFT LoRA) or `lokr_weights.safetensors` (LyCORIS LoKr)
-- **Compatibility Grouping**: Adapters are grouped into "Compatible" (matches loaded model type) and "Requires Model Switch"
-- **One-Click Switch & Load**: For incompatible adapters, click "Switch & Load" to automatically switch the base model and load the adapter
-- **Real-Time Controls**: Adjust adapter scale (0.0 - 2.0) and toggle active/inactive for A/B comparison
-- **Multiple Search Paths**: Configure any number of LoRA directories through the Settings page
+- **Auto-Detection**: Scans for `adapter_config.json` (PEFT LoRA) or `lokr_weights.safetensors` (LyCORIS LoKr)
+- **Compatibility Grouping**: Compatible vs. "Requires Model Switch"
+- **One-Click Switch & Load**: Swaps the base model and loads the adapter in one action
+- **Scale**: 0.0 (no effect) → 1.0 (full) → 2.0 (exaggerated)
+- **Style Tags**: Assign a trigger word per adapter — it's automatically prepended to your caption during generation
 
 ---
 
 ## Stem Separation
 
-Three separation modes available, with models downloaded automatically on first use (~1.8GB total):
-
-| Mode | Models Used | Output Stems | Quality |
+| Mode | Models Used | Output | Quality |
 |---|---|---|---|
-| **2-Stem (Vocals)** | BS-RoFormer | Vocals + Instrumental | SDR 12.97 |
-| **4-Stem (Full)** | Demucs htdemucs_ft | Vocals + Drums + Bass + Other | SDR 9.2 |
-| **Two-Pass (Best)** | BS-RoFormer + Demucs | Best vocals + Drums + Bass + Other | Combined best |
+| **2-Stem** | BS-RoFormer | Vocals + Instrumental | SDR 12.97 |
+| **4-Stem** | Demucs htdemucs_ft | Vocals + Drums + Bass + Other | SDR 9.2 |
+| **Two-Pass** | BS-RoFormer + Demucs | Best vocals + Drums + Bass + Other | Combined best |
+
+Models are downloaded automatically on first use (~1.8GB total).
 
 ---
 
@@ -166,21 +203,18 @@ Ace-Step-MusicGen-Player/
     frontend/          React 19 + TypeScript 5 + TailwindCSS v4
       src/
         components/    UI components organized by feature
-        stores/        Zustand state management
+        stores/        Zustand state management (player, generation, settings, library, stems)
         api/           Typed API client layer
-        hooks/         Custom React hooks
-  scripts/             Install/start/dev scripts
-  install.bat          Windows installer (root shortcut)
-  start.bat            Windows launcher (root shortcut)
+        hooks/         Custom React hooks (audio engine bridge)
+        lib/           Audio engine singleton, utilities
+  scripts/             Install/start/dev automation
 ```
 
 ---
 
 ## API Reference
 
-Full interactive API documentation is available at **http://127.0.0.1:3456/docs** when the server is running.
-
-### Core Endpoints
+Interactive docs at **http://127.0.0.1:3456/docs** when running.
 
 | Endpoint | Method | Description |
 |---|---|---|
@@ -188,7 +222,7 @@ Full interactive API documentation is available at **http://127.0.0.1:3456/docs*
 | `/api/generate/{id}/progress` | GET (SSE) | Real-time progress stream |
 | `/api/generate/upload` | POST | Upload reference audio |
 | `/api/stems/separate` | POST | Start stem separation |
-| `/api/stems/{id}/progress` | GET (SSE) | Separation progress stream |
+| `/api/stems/{id}/progress` | GET (SSE) | Separation progress |
 | `/api/models/status` | GET | Current model + GPU + LM status |
 | `/api/models/load` | POST | Switch model |
 | `/api/models/load-lm` | POST | Load language model |
@@ -197,15 +231,12 @@ Full interactive API documentation is available at **http://127.0.0.1:3456/docs*
 | `/api/lora/unload` | POST | Unload adapter |
 | `/api/lora/config` | PATCH | Update adapter scale/active |
 | `/api/lora/scan` | POST | Re-scan adapter directories |
-| `/api/lora/add-path` | POST | Add adapter search directory |
 | `/api/library` | GET | List generated tracks |
-| `/api/library/{id}` | GET | Track detail with stems |
-| `/api/library/{id}` | DELETE | Delete track |
+| `/api/library/{id}` | GET/DELETE | Track detail / delete |
 | `/api/gpu/status` | GET | GPU VRAM status |
-| `/api/settings` | GET/PUT | User settings (paths) |
-| `/api/settings/validate-path` | POST | Validate a filesystem path |
+| `/api/settings` | GET/PUT | User settings |
 
-### Example: Generate Music (cURL)
+### Quick Example (cURL)
 
 ```bash
 curl -X POST http://127.0.0.1:3456/api/generate \
@@ -217,71 +248,17 @@ curl -X POST http://127.0.0.1:3456/api/generate \
     "bpm": 128,
     "duration": 30,
     "inference_steps": 8,
-    "seed": -1,
-    "task_type": "text2music",
-    "batch_size": 1,
-    "audio_format": "flac"
+    "task_type": "text2music"
   }'
-```
-
-### Example: Generate Music (Python)
-
-```python
-import requests
-
-response = requests.post("http://127.0.0.1:3456/api/generate", json={
-    "caption": "Chill lo-fi hip hop beat with jazzy piano",
-    "lyrics": "[Instrumental]",
-    "instrumental": True,
-    "bpm": 85,
-    "duration": 60,
-    "inference_steps": 8,
-    "task_type": "text2music",
-})
-job = response.json()
-print(f"Job ID: {job['job_id']}")
-
-# Subscribe to progress via SSE
-import sseclient
-url = f"http://127.0.0.1:3456/api/generate/{job['job_id']}/progress"
-client = sseclient.SSEClient(url)
-for event in client.events():
-    print(event.data)
-```
-
-### Example: Generate Music (JavaScript)
-
-```javascript
-const response = await fetch('http://127.0.0.1:3456/api/generate', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    caption: 'Epic orchestral trailer music',
-    lyrics: '[Instrumental]',
-    instrumental: true,
-    duration: 45,
-    inference_steps: 8,
-    task_type: 'text2music',
-  }),
-})
-const { job_id } = await response.json()
-
-// Subscribe to progress
-const evtSource = new EventSource(
-  `http://127.0.0.1:3456/api/generate/${job_id}/progress`
-)
-evtSource.onmessage = (event) => {
-  const data = JSON.parse(event.data)
-  console.log(`Progress: ${data.percent}%`)
-}
 ```
 
 ---
 
 ## Tech Stack
 
-**Backend**: Python 3.10+, FastAPI, Uvicorn, aiosqlite, audio-separator, librosa, PyTorch
-**Frontend**: React 19, TypeScript 5, Vite 6, TailwindCSS v4, Zustand, Radix UI, wavesurfer.js, Framer Motion, Lucide Icons
+**Backend**: Python 3.10+, FastAPI, Uvicorn, PyTorch, aiosqlite, audio-separator, librosa
+**Frontend**: React 19, TypeScript 5, Vite 7, TailwindCSS v4, Zustand, Radix UI, Framer Motion, Lucide Icons
+**Audio**: Web Audio API (AnalyserNode), HTMLAudioElement, wavesurfer.js
 
 ---
 

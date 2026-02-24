@@ -2,6 +2,7 @@ import { useEffect, type ReactNode } from 'react'
 import Sidebar from './Sidebar'
 import PlayerBar from './PlayerBar'
 import { useSettingsStore } from '../../stores/useSettingsStore'
+import { useAudioEngine } from '../../hooks/useAudioEngine'
 
 interface AppShellProps {
   children: ReactNode
@@ -9,6 +10,9 @@ interface AppShellProps {
 
 export default function AppShell({ children }: AppShellProps) {
   const fetchModelStatus = useSettingsStore((s) => s.fetchModelStatus)
+
+  // Initialise the audio engine (bridges store <-> HTMLAudioElement)
+  useAudioEngine()
 
   // Fetch model status on app mount so all pages know whether a model is loaded
   useEffect(() => {

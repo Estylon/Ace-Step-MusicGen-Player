@@ -123,3 +123,46 @@ def detect_model_type(model_name: str) -> str:
     if "base" in name_lower:
         return "base"
     return MODEL_TYPES.get(model_name, "unknown")
+
+
+# ---------------------------------------------------------------------------
+# LM model auto-detection
+# ---------------------------------------------------------------------------
+# Preferred LM models, in order of preference (largest first).
+# The auto-detect logic will pick the best one that fits in VRAM.
+LM_MODEL_PREFERENCES = [
+    ("acestep-5Hz-lm-4B", 10.0),    # Needs ~10 GB free VRAM
+    ("acestep-5Hz-lm-1.7B", 5.0),   # Needs ~5 GB free VRAM
+]
+
+
+def detect_best_lm_model(checkpoint_dir: Path, available_vram_gb: float = 0.0) -> str:
+    """Auto-detect the best available LM model in the checkpoint directory.
+
+    Scans for directories matching ``acestep-5Hz-lm-*`` and picks the largest
+    one that fits in available VRAM.  Falls back to the smallest available model
+    if VRAM info is unavailable (``available_vram_gb <= 0``).
+
+    Returns the model folder name (e.g. ``"acestep-5Hz-lm-1.7B"``) or ``""``
+    if no LM model is found.
+    """
+    if not checkpoint_dir.exists():
+        return ""
+
+    # Discover available LM folders
+    available_lm: set[str] = set()
+    for d in checkpoint_dir.iterdir():
+        if d.is_dir() and "lm" in d.name.lower() and "5hz" in d.name.lower():
+            available_lm.add(d.name)
+
+    if not available_lm:
+        return ""
+
+    # Try preferred models in order (largest → smallest)
+    for model_name, vram_needed in LM_MODEL_PREFERENCES:
+        if model_name in available_lm:
+            if available_vram_gb <= 0 or available_vram_gb >= vram_needed:
+                return model_name
+
+    # Fallback: return any available LM model (pick the first alphabetically)
+    return sorted(available_lm)[0]

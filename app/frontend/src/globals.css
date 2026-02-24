@@ -61,7 +61,7 @@
 
   /* Sidebar */
   --sidebar-width: 260px;
-  --player-height: 80px;
+  --player-height: 86px;
 }
 
 /* ── Base Styles ────────────────────────────────────────────────────────── */
@@ -126,4 +126,15 @@ body {
 
 @utility bg-gradient-accent {
   background: var(--accent-gradient);
+}
+
+@utility animate-pulse-slow {
+  animation: pulse-slow 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* ── Keyframes ─────────────────────────────────────────────────────────── */
+
+@keyframes pulse-slow {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
 }

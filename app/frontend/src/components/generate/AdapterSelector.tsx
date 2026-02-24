@@ -7,6 +7,7 @@ import {
   X,
   Power,
   Lock,
+  Tag,
 } from 'lucide-react'
 import { useSettingsStore } from '../../stores/useSettingsStore'
 import Badge from '../ui/Badge'
@@ -21,9 +22,12 @@ export default function AdapterSelector() {
   const updateAdapterConfig = useSettingsStore((s) => s.updateAdapterConfig)
   const fetchAdapterList = useSettingsStore((s) => s.fetchAdapterList)
   const modelStatus = useSettingsStore((s) => s.modelStatus)
+  const adapterStyleTags = useSettingsStore((s) => s.adapterStyleTags)
+  const setAdapterStyleTag = useSettingsStore((s) => s.setAdapterStyleTag)
 
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   // Fetch adapters when component mounts or model changes
   useEffect(() => {
@@ -43,10 +47,11 @@ export default function AdapterSelector() {
     if (busy) return
     setBusy(true)
     setOpen(false)
+    setError(null)
     try {
       await loadAdapter(path, 1.0)
-    } catch {
-      // handled in store
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load adapter')
     } finally {
       setBusy(false)
     }
@@ -223,36 +228,68 @@ export default function AdapterSelector() {
         )}
       </div>
 
+      {/* Error message */}
+      {error && !busy && (
+        <p className="text-xs text-[var(--error)] px-1">{error}</p>
+      )}
+
       {/* Loaded adapter controls */}
       {isLoaded && current && !busy && (
-        <div className="flex items-center gap-3 pl-1">
-          {/* Active toggle */}
-          <button
-            type="button"
-            onClick={handleToggleActive}
-            className={clsx(
-              'flex items-center gap-1 px-2 py-1 rounded-[var(--radius-sm)] text-xs font-medium transition-colors',
-              current.active
-                ? 'bg-[var(--success-muted)] text-[var(--success)]'
-                : 'bg-[var(--bg-elevated)] text-[var(--text-muted)]',
-            )}
-            title={current.active ? 'Click to deactivate' : 'Click to activate'}
-          >
-            <Power className="w-3 h-3" />
-            {current.active ? 'ON' : 'OFF'}
-          </button>
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center gap-3 pl-1">
+            {/* Active toggle */}
+            <button
+              type="button"
+              onClick={handleToggleActive}
+              className={clsx(
+                'flex items-center gap-1 px-2 py-1 rounded-[var(--radius-sm)] text-xs font-medium transition-colors',
+                current.active
+                  ? 'bg-[var(--success-muted)] text-[var(--success)]'
+                  : 'bg-[var(--bg-elevated)] text-[var(--text-muted)]',
+              )}
+              title={current.active ? 'Click to deactivate' : 'Click to activate'}
+            >
+              <Power className="w-3 h-3" />
+              {current.active ? 'ON' : 'OFF'}
+            </button>
 
-          {/* Scale slider */}
-          <div className="flex-1 min-w-0">
-            <Slider
-              label="Scale"
-              min={0}
-              max={2}
-              step={0.05}
-              value={[current.scale]}
-              onValueChange={handleScaleChange}
-              formatValue={(v) => v.toFixed(2)}
+            {/* Scale slider */}
+            <div className="flex-1 min-w-0">
+              <Slider
+                label="Scale"
+                min={0}
+                max={2}
+                step={0.05}
+                value={[current.scale]}
+                onValueChange={handleScaleChange}
+                formatValue={(v) => v.toFixed(2)}
+              />
+            </div>
+          </div>
+
+          {/* Style tag (trigger word) */}
+          <div className="flex items-center gap-2 pl-1">
+            <Tag className="w-3.5 h-3.5 text-[var(--text-muted)] shrink-0" />
+            <input
+              type="text"
+              placeholder="Style tag / trigger word..."
+              value={adapterStyleTags[current.path] ?? ''}
+              onChange={(e) => setAdapterStyleTag(current.path, e.target.value)}
+              className={clsx(
+                'flex-1 min-w-0 h-7 px-2 text-xs rounded-[var(--radius-sm)]',
+                'bg-[var(--bg-secondary)] text-[var(--text-primary)]',
+                'border border-[var(--border)]',
+                'placeholder:text-[var(--text-muted)]',
+                'transition-colors duration-[var(--transition)]',
+                'hover:border-[var(--border-hover)]',
+                'focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]',
+              )}
             />
+            {(adapterStyleTags[current.path] ?? '').trim() && (
+              <Badge variant="accent" className="shrink-0">
+                prepend
+              </Badge>
+            )}
           </div>
         </div>
       )}

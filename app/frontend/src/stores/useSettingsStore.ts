@@ -14,18 +14,31 @@ interface SettingsState {
   adapterList: AdapterListResponse | null
   loading: boolean
 
+  /** Style tags (trigger words) keyed by adapter path. */
+  adapterStyleTags: Record<string, string>
+
   fetchModelStatus: () => Promise<void>
   fetchAdapterList: () => Promise<void>
   loadModel: (name: string) => Promise<void>
   loadAdapter: (path: string, scale: number) => Promise<void>
   unloadAdapter: () => Promise<void>
   updateAdapterConfig: (active?: boolean, scale?: number) => Promise<void>
+
+  /** Set/update the style tag for a specific adapter path. */
+  setAdapterStyleTag: (adapterPath: string, tag: string) => void
+
+  /**
+   * Return the active adapter's style tag, or empty string if none.
+   * "Active" means: adapter is loaded AND enabled AND has a non-empty tag.
+   */
+  getActiveStyleTag: () => string
 }
 
 export const useSettingsStore = create<SettingsState>((set, get) => ({
   modelStatus: null,
   adapterList: null,
   loading: false,
+  adapterStyleTags: {},
 
   fetchModelStatus: async () => {
     set({ loading: true })
@@ -97,5 +110,18 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       console.error('Failed to update adapter config:', err)
       throw err
     }
+  },
+
+  setAdapterStyleTag: (adapterPath, tag) => {
+    set((state) => ({
+      adapterStyleTags: { ...state.adapterStyleTags, [adapterPath]: tag },
+    }))
+  },
+
+  getActiveStyleTag: () => {
+    const { adapterList, adapterStyleTags } = get()
+    const current = adapterList?.current
+    if (!current?.loaded || !current.active || !current.path) return ''
+    return (adapterStyleTags[current.path] ?? '').trim()
   },
 }))

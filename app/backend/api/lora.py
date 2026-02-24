@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
+from starlette.concurrency import run_in_threadpool
 
 from models.schemas import (
     AdapterConfigUpdate,
@@ -34,10 +35,14 @@ async def list_adapters():
 
 @router.post("/load")
 async def load_adapter(request: LoadAdapterRequest):
-    """Load a LoRA/LoKr adapter."""
+    """Load a LoRA/LoKr adapter.
+
+    This may trigger lazy model weight loading, so it runs in a
+    thread pool to avoid blocking the event loop.
+    """
     svc = _get_service()
     try:
-        msg = svc.load_adapter(request.path, request.scale)
+        msg = await run_in_threadpool(svc.load_adapter, request.path, request.scale)
         return {"status": "ok", "message": msg}
     except Exception as e:
         raise HTTPException(500, str(e))

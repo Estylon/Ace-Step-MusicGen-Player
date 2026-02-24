@@ -11,11 +11,13 @@ A complete guide to using the ACE-Step MusicGen Player for music generation, mod
 3. [Generating Music](#generating-music)
 4. [Model Management](#model-management)
 5. [LoRA & LoKr Adapters](#lora--lokr-adapters)
-6. [Stem Separation](#stem-separation)
-7. [Library & Playback](#library--playback)
-8. [Settings](#settings)
-9. [Keyboard Shortcuts](#keyboard-shortcuts)
-10. [Troubleshooting](#troubleshooting)
+6. [Style Tags & Trigger Words](#style-tags--trigger-words)
+7. [Stem Separation](#stem-separation)
+8. [Player & Playback](#player--playback)
+9. [Library](#library)
+10. [Settings](#settings)
+11. [Keyboard Shortcuts](#keyboard-shortcuts)
+12. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -27,7 +29,7 @@ Before installing, make sure you have:
 - **Python 3.10 or later** — Download from [python.org](https://python.org)
 - **Node.js 18 or later** — Download from [nodejs.org](https://nodejs.org)
 - **NVIDIA GPU with CUDA** — Strongly recommended for fast generation. CPU works but generation will be very slow.
-- **ACE-Step Trainer** — A local installation of the ACE-Step trainer with model checkpoints
+- **ACE-Step checkpoints** — Model checkpoint files (turbo, base, or SFT)
 
 ### Windows Installation
 
@@ -114,10 +116,13 @@ The Generate page is the main workspace. It provides full control over all ACE-S
 
 1. Navigate to **Generate** in the sidebar
 2. Select a **Task Type** (text2music is the most common)
-3. Write a **Caption** — a short description of the music you want
-4. Optionally write **Lyrics** (or leave empty / set to "[Instrumental]")
-5. Set basic metadata: **BPM**, **Key/Scale**, **Duration**
-6. Click **Generate**
+3. Optionally set a **Track Name** — this names your track in the player and library
+4. Write a **Music Description** (caption) — describe the music you want
+5. Optionally write **Lyrics** (or toggle "Instrumental")
+6. Set metadata: **BPM**, **Key/Scale**, **Duration**
+7. Click **Generate**
+
+> **Tip**: If a LoRA adapter is active with a style tag, you'll see an indicator below the Music Description field showing the tag that will be prepended automatically.
 
 ### Task Types
 
@@ -137,16 +142,17 @@ The Generate page is the main workspace. It provides full control over all ACE-S
 - Be specific: "Upbeat electronic dance music, 128 BPM, with bright synth leads and punchy drums" works better than "dance music"
 - Mention instruments, mood, genre, and energy level
 - The AI can also infer BPM, key, and language from the caption when the Language Model is active
+- If you're using a LoRA with a style tag, you don't need to manually type the trigger word — it's prepended automatically
 
 ### Music Metadata
 
 | Parameter | Description | Default |
 |---|---|---|
-| **BPM** | Beats per minute (30-300) | Auto-detected or 120 |
+| **BPM** | Beats per minute (30–300) | Auto-detected or 120 |
 | **Key/Scale** | Musical key (e.g. "C major", "A minor") | Auto |
 | **Time Signature** | Time signature (4/4, 3/4, etc.) | 4/4 |
 | **Language** | Vocal language (51 languages supported) | Unknown (auto-detect) |
-| **Duration** | Track length in seconds (10-600) | Auto (-1) |
+| **Duration** | Track length in seconds (10–600) | Auto (-1) |
 
 ### Diffusion Settings
 
@@ -154,9 +160,9 @@ These control the generation quality and behavior. The available options change 
 
 | Parameter | Turbo | Base/SFT | Description |
 |---|---|---|---|
-| **Steps** | 8 (fixed) | 32-100 (slider) | More steps = higher quality but slower |
-| **Guidance Scale** | Hidden | 1.0-30.0 | How strictly to follow the prompt |
-| **Shift** | 3.0 | 1.0-5.0 | Noise schedule shift |
+| **Steps** | 8 (fixed) | 32–100 (slider) | More steps = higher quality but slower |
+| **Guidance Scale** | Hidden | 1.0–30.0 | How strictly to follow the prompt |
+| **Shift** | 3.0 | 1.0–5.0 | Noise schedule shift |
 | **Infer Method** | ODE only | ODE or SDE | Sampling method |
 | **ADG** | Hidden | Toggle | Adaptive Diffusion Guidance |
 | **CFG Interval** | Hidden | Start/End sliders | When CFG is active during generation |
@@ -169,7 +175,7 @@ When a language model is loaded, it can enhance generation:
 | Parameter | Description | Default |
 |---|---|---|
 | **Thinking** | Enable Chain-of-Thought reasoning | On |
-| **Temperature** | LM creativity (0.0-2.0) | 0.85 |
+| **Temperature** | LM creativity (0.0–2.0) | 0.85 |
 | **CFG Scale** | LM guidance strength | 2.0 |
 | **Top-K / Top-P** | Sampling parameters | 0 / 0.9 |
 | **CoT Metas** | Auto-infer BPM/key/time from caption | On |
@@ -179,11 +185,20 @@ When a language model is loaded, it can enhance generation:
 
 ### Batch Generation
 
-Set **Batch Size** (1-8) to generate multiple variations at once. Each will use a different random seed.
+Set **Batch Size** (1–8) to generate multiple variations at once. Each will use a different random seed.
 
 ### Reference Audio
 
 For **cover**, **repaint**, **extract**, **lego**, and **complete** tasks, you need to upload a reference audio file. Click **"Upload Reference Audio"** to select a file.
+
+### Generation Results
+
+After generation completes, result cards appear with:
+- **Animated waveform** with playback progress overlay
+- **Play/Pause overlay** — click anywhere on the waveform to play
+- **Editable title** — click the pencil icon to rename inline (Enter to save, Escape to cancel)
+- **Status badges** — "Playing" or "Paused" indicators
+- **Active track glow** — purple glow on the currently playing card
 
 ---
 
@@ -208,7 +223,7 @@ The current model is shown in the sidebar. To switch:
 - Best for: Quick iterations, drafting ideas
 
 **Base** (Highest Quality)
-- 32-100 adjustable steps
+- 32–100 adjustable steps
 - Full CFG support for precise prompt following
 - Supports all 6 task types
 - Best for: Final production, complex tasks
@@ -260,6 +275,10 @@ The app automatically detects adapters by scanning your configured directories f
 
 The base model type is inferred from the `base_model_name_or_path` field in the adapter config.
 
+### Lazy-Load Aware
+
+The model uses lazy initialization — weights aren't loaded into GPU memory until the first generation. If you try to load an adapter before generating anything, the player automatically triggers weight loading first, then loads the adapter. You don't need to worry about the order.
+
 ### Tips
 
 - You can add any number of search directories in **Settings > LoRA Search Paths**
@@ -267,6 +286,41 @@ The base model type is inferred from the `base_model_name_or_path` field in the 
 - Keep adapters organized by type (turbo/base) in separate folders for clarity
 - Scale values below 1.0 create a subtle effect; above 1.0 creates an exaggerated effect
 - Use the active/inactive toggle to quickly compare generation with and without the adapter
+
+---
+
+## Style Tags & Trigger Words
+
+Style tags let you assign a **trigger word** (or phrase) to each LoRA/LoKr adapter. When that adapter is active, the tag is automatically prepended to your caption during generation.
+
+### How It Works
+
+1. Load an adapter (see [LoRA & LoKr Adapters](#lora--lokr-adapters))
+2. In the adapter panel, find the **Style tag / trigger word** input field (with the tag icon)
+3. Type the trigger word for this adapter (e.g. `lofi_style`, `epic_orchestral`, `synthwave_vibe`)
+4. A **"prepend"** badge appears confirming the tag is active
+5. Below the **Music Description** field, an indicator shows: **`lofi_style` will be prepended** along with the adapter name
+
+### At Generation Time
+
+When you click Generate, the system automatically builds the final caption:
+
+```
+[style tag] + [space] + [your caption]
+```
+
+For example:
+- Style tag: `lofi_style`
+- Your caption: `Chill beat with piano and vinyl crackle`
+- Sent to the model: `lofi_style Chill beat with piano and vinyl crackle`
+
+### Details
+
+- Style tags are saved **per adapter path** — each adapter remembers its own tag
+- Tags persist across sessions (stored in the settings store)
+- If no style tag is set, or the adapter is inactive/unloaded, your caption is sent as-is
+- The tag is only prepended if both the adapter is **loaded** and **active**
+- You can clear a tag at any time by emptying the input field
 
 ---
 
@@ -304,7 +358,43 @@ After separation, the multi-track player lets you:
 
 ---
 
-## Library & Playback
+## Player & Playback
+
+### Player Bar
+
+The player bar sits at the bottom of the screen and provides a full playback experience:
+
+- **Seek bar** — thin bar at the very top of the player; click or drag anywhere to seek
+- **Album art area** — track artwork (or placeholder) on the left
+- **Track info** — title and artist/model info
+- **Transport controls** (center):
+  - Shuffle toggle
+  - Previous track
+  - Play / Pause (large central button)
+  - Next track
+  - Repeat toggle
+- **Time display** — current position and total duration
+- **Audio visualizer** — real-time frequency bars (purple gradient) driven by the Web Audio API AnalyserNode
+- **Volume control** — click the speaker icon to mute/unmute, hover/click to adjust volume
+
+### Audio Engine
+
+The player uses a real audio engine under the hood:
+- **HTMLAudioElement** for reliable audio playback and seeking
+- **Web Audio API** with an AnalyserNode connected for real-time frequency data
+- The audio engine is a singleton — one instance shared across the entire app
+- All playback actions (play, pause, seek, volume) are synchronized between the UI state and the actual audio element
+
+### Playback from Generation Results
+
+Click any result card's waveform area to start playing that track. The card shows:
+- Animated waveform bars with a progress overlay
+- "Playing" / "Paused" badge
+- Purple glow effect on the active card
+
+---
+
+## Library
 
 ### Generation Library
 
@@ -316,14 +406,6 @@ Features:
 - **Track Cards** — Visual cards showing waveform preview, duration, model used, adapter info
 - **Track Detail** — Click a track to see full metadata, generation parameters, and stems
 - **Delete** — Remove tracks and their associated files
-
-### Player Bar
-
-The player bar at the bottom of the screen provides:
-- **Transport controls** — Play/pause, skip forward/back
-- **Progress bar** — Click or drag to seek
-- **Volume control** — Adjust playback volume
-- **Track info** — Current track name and duration
 
 ---
 
@@ -391,6 +473,24 @@ Each path input shows a validation indicator:
 2. Go to the **Adapter Panel** and click **"Scan"**
 3. Each adapter needs an `adapter_config.json` (LoRA) or `lokr_weights.safetensors` (LoKr) file
 
+### Adapter fails to load / "Model not initialized"
+
+**Cause**: In older versions, loading an adapter before the first generation would fail silently because the model uses lazy initialization.
+**Fix**: This is now handled automatically — the player triggers weight loading before adapter load. If you still see issues, try generating one track first, then load the adapter.
+
+### No sound when clicking Play
+
+**Cause**: The audio engine needs a user interaction to initialize the Web Audio API context (browser policy).
+**Fix**: Click the play button directly (not via keyboard shortcut) for the first playback. After that, all controls work normally.
+
+### Generation produces static / noise
+
+**Cause**: Incompatible `transformers` library version. Versions 5.x break FSQ (Finite Scalar Quantization) non-persistent buffers during meta device initialization.
+**Fix**: Ensure you have `transformers>=4.51.0,<4.58.0` installed. The install script handles this, but if you upgraded manually, downgrade with:
+```bash
+pip install transformers==4.57.6
+```
+
 ### Generation is very slow
 
 **Cause**: Running on CPU instead of GPU.
@@ -431,7 +531,7 @@ The full REST API is available at `http://127.0.0.1:3456/docs` (Swagger UI) when
 
 ### Programmatic Generation
 
-See the [README.md](README.md) for code examples in Python, JavaScript, and cURL.
+See the [README.md](README.md) for code examples in cURL.
 
 ### Multiple LoRA Directories
 
@@ -441,3 +541,13 @@ You can configure any number of LoRA search paths in Settings. This is useful if
 - Downloaded from others: `D:\community-loras`
 
 All directories are scanned when the adapter list is refreshed.
+
+### Using with the ACE-Step LoRA Trainer
+
+This player is designed to work alongside [ace-lora-trainer](https://github.com/Estylon/ace-lora-trainer). Recommended setup:
+
+1. Set the **Trainer Path** to your trainer installation
+2. Set the **Checkpoint Directory** to `{trainer}/checkpoints`
+3. Add `{trainer}/output` as a LoRA search path
+4. Train a LoRA in the trainer, then immediately test it here by clicking **Scan** and loading the new adapter
+5. Assign a **style tag** to the adapter for automatic trigger word prepending
