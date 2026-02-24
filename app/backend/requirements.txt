@@ -31,6 +31,8 @@ vector_quantize_pytorch
 # ── LoRA/LoKr adapter support ──────────────────────────────────────
 lycoris-lora>=2.0.0
 
-# ── Stem separation — installed separately in install script ────────
-# due to diffq-fixed Cython build issues on Python 3.13+
-# audio-separator[gpu]>=0.30.0
+# ── Stem separation ──────────────────────────────────────────────────
+# Note: on Python 3.13+ / Windows, the [gpu] extra may fail to build
+# diffq-fixed (Cython issue). In that case use: pip install audio-separator --no-deps
+# then install runtime deps manually (see install.bat for the full list).
+audio-separator>=0.30.0
