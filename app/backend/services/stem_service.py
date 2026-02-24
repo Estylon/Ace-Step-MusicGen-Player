@@ -65,6 +65,14 @@ class StemService:
         else:
             raise ValueError(f"Unknown mode: {mode}")
 
+    @staticmethod
+    def _resolve_output(fpath: str, output_dir: Path) -> Path:
+        """Ensure a separator output path is absolute (resolve against output_dir)."""
+        p = Path(fpath)
+        if not p.is_absolute():
+            p = output_dir / p
+        return p
+
     def _separate_vocals(self, separator, audio_path, output_dir, cb) -> list[StemInfo]:
         """BS-RoFormer: best vocal isolation (SDR 12.97)."""
         if cb:
@@ -81,16 +89,16 @@ class StemService:
 
         stems = []
         for fpath in output_files:
-            fpath = str(fpath)
-            fname = Path(fpath).stem.lower()
+            fpath = self._resolve_output(str(fpath), output_dir)
+            fname = fpath.stem.lower()
             stem_type = "vocals" if "vocal" in fname else "instrumental"
             stems.append(StemInfo(
                 id=str(uuid4()),
                 track_id="",
                 stem_type=stem_type,
-                audio_path=fpath,
-                audio_url=get_audio_url(Path(fpath).name, f"stems/{output_dir.name}"),
-                duration=get_audio_duration(fpath),
+                audio_path=str(fpath),
+                audio_url=get_audio_url(fpath.name, f"stems/{output_dir.name}"),
+                duration=get_audio_duration(str(fpath)),
             ))
 
         if cb:
@@ -113,8 +121,8 @@ class StemService:
 
         stems = []
         for fpath in output_files:
-            fpath = str(fpath)
-            fname = Path(fpath).stem.lower()
+            fpath = self._resolve_output(str(fpath), output_dir)
+            fname = fpath.stem.lower()
             # Demucs names: vocals, drums, bass, other
             stem_type = "other"
             for st in ("vocals", "drums", "bass", "other"):
@@ -125,9 +133,9 @@ class StemService:
                 id=str(uuid4()),
                 track_id="",
                 stem_type=stem_type,
-                audio_path=fpath,
-                audio_url=get_audio_url(Path(fpath).name, f"stems/{output_dir.name}"),
-                duration=get_audio_duration(fpath),
+                audio_path=str(fpath),
+                audio_url=get_audio_url(fpath.name, f"stems/{output_dir.name}"),
+                duration=get_audio_duration(str(fpath)),
             ))
 
         if cb:
@@ -153,7 +161,7 @@ class StemService:
         instrumental_path = None
         vocals_path = None
         for fpath in pass1_files:
-            fpath = str(fpath)
+            fpath = str(self._resolve_output(str(fpath), output_dir))
             fname = Path(fpath).stem.lower()
             if "vocal" in fname and "instrument" not in fname:
                 vocals_path = fpath
@@ -196,8 +204,8 @@ class StemService:
 
         # Drums, bass, other from pass 2
         for fpath in pass2_files:
-            fpath = str(fpath)
-            fname = Path(fpath).stem.lower()
+            fpath = self._resolve_output(str(fpath), pass2_dir)
+            fname = fpath.stem.lower()
             stem_type = "other"
             for st in ("drums", "bass", "other"):
                 if st in fname:
@@ -210,11 +218,11 @@ class StemService:
                 id=str(uuid4()),
                 track_id="",
                 stem_type=stem_type,
-                audio_path=fpath,
+                audio_path=str(fpath),
                 audio_url=get_audio_url(
-                    Path(fpath).name, f"stems/{output_dir.name}/pass2"
+                    fpath.name, f"stems/{output_dir.name}/pass2"
                 ),
-                duration=get_audio_duration(fpath),
+                duration=get_audio_duration(str(fpath)),
             ))
 
         if cb:
