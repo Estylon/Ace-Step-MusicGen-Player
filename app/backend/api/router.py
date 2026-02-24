@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from api import generate, stems, models, lora, gpu, library, audio, settings
+from api import generate, stems, models, lora, gpu, library, audio, settings, downloads
 
 api_router = APIRouter()
 
@@ -16,3 +16,4 @@ api_router.include_router(gpu.router)
 api_router.include_router(library.router)
 api_router.include_router(audio.router)
 api_router.include_router(settings.router)
+api_router.include_router(downloads.router)

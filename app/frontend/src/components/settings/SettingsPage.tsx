@@ -10,6 +10,11 @@ import {
   RefreshCw,
   Play,
   Cpu,
+  Download,
+  X,
+  HardDrive,
+  Brain,
+  Package,
 } from 'lucide-react'
 import clsx from 'clsx'
 import Button from '../ui/Button'
@@ -27,6 +32,7 @@ import {
 import { getModelStatus, loadModel } from '../../api/models'
 import { useSettingsStore } from '../../stores/useSettingsStore'
 import type { ModelStatusResponse } from '../../types/api'
+import type { DownloadableModel } from '../../api/downloads'
 
 // ── Path input with validation + native folder picker ───────────────────────
 
@@ -228,6 +234,14 @@ export default function SettingsPage() {
   const [modelError, setModelError] = useState<string | null>(null)
   const refreshGlobalStatus = useSettingsStore((s) => s.fetchModelStatus)
 
+  // Download state from store
+  const downloadableModels = useSettingsStore((s) => s.downloadableModels)
+  const hasEssential = useSettingsStore((s) => s.hasEssential)
+  const activeDownloads = useSettingsStore((s) => s.activeDownloads)
+  const fetchDownloadable = useSettingsStore((s) => s.fetchDownloadable)
+  const startModelDownload = useSettingsStore((s) => s.startModelDownload)
+  const cancelModelDownload = useSettingsStore((s) => s.cancelModelDownload)
+
   // Form state
   const [trainerPath, setTrainerPath] = useState('')
   const [checkpointDir, setCheckpointDir] = useState('')
@@ -261,7 +275,8 @@ export default function SettingsPage() {
 
   useEffect(() => {
     fetchSettings()
-  }, [fetchSettings])
+    fetchDownloadable()
+  }, [fetchSettings, fetchDownloadable])
 
   // Validate a single path
   const handleValidate = useCallback(async (key: string, path: string) => {
@@ -325,6 +340,35 @@ export default function SettingsPage() {
       setModelLoading(false)
     }
   }, [refreshGlobalStatus])
+
+  // Download handler
+  const handleStartDownload = useCallback(
+    async (model: DownloadableModel) => {
+      try {
+        await startModelDownload(model.repo_id, model.name, model.size_gb)
+      } catch (err) {
+        setModelError(err instanceof Error ? err.message : 'Download failed')
+      }
+    },
+    [startModelDownload],
+  )
+
+  // Refresh model status after download completes (also done in store, but this updates local state)
+  const activeDownloadValues = Object.values(activeDownloads)
+  const completedCount = activeDownloadValues.filter((d) => d.status === 'complete').length
+  useEffect(() => {
+    if (completedCount > 0) {
+      getModelStatus().then(setModelStatus).catch(() => {})
+    }
+  }, [completedCount])
+
+  // Categorized downloadable models
+  const ditModels = downloadableModels.filter((m) => m.type === 'dit')
+  const lmModels = downloadableModels.filter((m) => m.type === 'lm')
+  const bundleModel = downloadableModels.find((m) => m.type === 'bundle')
+
+  // Check if any download is currently in progress
+  const hasActiveDownload = activeDownloadValues.some((d) => d.status === 'downloading')
 
   // LoRA path helpers
   const addLoraPath = useCallback(() => {
@@ -504,14 +548,42 @@ export default function SettingsPage() {
               ))}
             </div>
           ) : (
-            <div className="flex flex-col items-center gap-2 py-8 text-center">
-              <Cpu className="h-8 w-8 text-[var(--text-muted)]" />
-              <p className="text-sm text-[var(--text-muted)]">
-                No models found in the checkpoint directory.
-              </p>
-              <p className="text-xs text-[var(--text-muted)]">
-                Make sure the checkpoint directory path is correct and contains model folders with config.json files.
-              </p>
+            <div className="flex flex-col items-center gap-3 py-8 text-center">
+              {!hasEssential && bundleModel && !bundleModel.installed ? (
+                <>
+                  <Download className="h-8 w-8 text-[var(--accent)]" />
+                  <p className="text-sm font-medium text-[var(--text-primary)]">
+                    No models found &mdash; download ACE-Step models to get started
+                  </p>
+                  <p className="text-xs text-[var(--text-muted)] max-w-md">
+                    Download the official ACE-Step 1.5 package (~{bundleModel.size_gb} GB) which
+                    includes the turbo model, VAE, text encoder, and language model.
+                  </p>
+                  <Button
+                    onClick={() => handleStartDownload(bundleModel)}
+                    disabled={hasActiveDownload || isDirty}
+                    loading={hasActiveDownload}
+                  >
+                    <Download className="h-4 w-4" />
+                    Download ACE-Step 1.5
+                  </Button>
+                  {isDirty && (
+                    <p className="text-xs text-[var(--warning)]">
+                      Save your settings first to set the download destination.
+                    </p>
+                  )}
+                </>
+              ) : (
+                <>
+                  <Cpu className="h-8 w-8 text-[var(--text-muted)]" />
+                  <p className="text-sm text-[var(--text-muted)]">
+                    No models found in the checkpoint directory.
+                  </p>
+                  <p className="text-xs text-[var(--text-muted)]">
+                    Make sure the checkpoint directory path is correct and contains model folders with config.json files.
+                  </p>
+                </>
+              )}
             </div>
           )}
 
@@ -519,6 +591,212 @@ export default function SettingsPage() {
             <p className="text-xs text-[var(--warning)]">
               Save your settings first before loading a model.
             </p>
+          )}
+        </div>
+      </Card>
+
+      {/* Download Models */}
+      <Card>
+        <div className="flex flex-col gap-4 p-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-base font-semibold text-[var(--text-primary)]">
+                Download Models
+              </h3>
+              <p className="text-xs text-[var(--text-muted)] mt-1">
+                Download official ACE-Step models from HuggingFace
+              </p>
+            </div>
+            <Button size="sm" variant="secondary" onClick={fetchDownloadable}>
+              <RefreshCw className="h-3.5 w-3.5" />
+              Refresh
+            </Button>
+          </div>
+
+          {/* Active downloads with progress bars */}
+          {activeDownloadValues.filter((d) => d.status === 'downloading').length > 0 && (
+            <div className="flex flex-col gap-2">
+              {activeDownloadValues
+                .filter((d) => d.status === 'downloading')
+                .map((dl) => (
+                  <div
+                    key={dl.id}
+                    className="flex items-center gap-3 p-3 rounded-[var(--radius)] border border-[var(--accent)]/30 bg-[var(--accent-muted)]"
+                  >
+                    <Loader2 className="h-5 w-5 text-[var(--accent)] animate-spin shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-[var(--text-primary)] truncate">
+                          {dl.name}
+                        </span>
+                        <span className="text-xs text-[var(--text-muted)] shrink-0 ml-2">
+                          {dl.downloadedGb.toFixed(1)} / {dl.totalGb.toFixed(1)} GB
+                        </span>
+                      </div>
+                      <div className="mt-1.5 h-1.5 rounded-full bg-[var(--bg-elevated)] overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-[var(--accent)] transition-all duration-500"
+                          style={{ width: `${Math.min(dl.percent, 100)}%` }}
+                        />
+                      </div>
+                      <p className="text-xs text-[var(--text-muted)] mt-1 truncate">
+                        {dl.message} &mdash; {dl.percent.toFixed(0)}%
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => cancelModelDownload(dl.id)}
+                      title="Cancel download"
+                      className="p-1.5 rounded-[var(--radius)] text-[var(--text-muted)] hover:text-[var(--error)] hover:bg-[var(--error)]/10 transition-colors shrink-0"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                ))}
+            </div>
+          )}
+
+          {/* Completed/error download notifications */}
+          {activeDownloadValues.filter((d) => d.status === 'complete').length > 0 && (
+            <div className="flex items-center gap-2 p-2 rounded-[var(--radius)] bg-[var(--success)]/10">
+              <CheckCircle2 className="h-4 w-4 text-[var(--success)] shrink-0" />
+              <span className="text-xs text-[var(--success)]">
+                {activeDownloadValues.filter((d) => d.status === 'complete').map((d) => d.name).join(', ')} downloaded successfully
+              </span>
+            </div>
+          )}
+
+          {activeDownloadValues.filter((d) => d.status === 'error').length > 0 && (
+            <div className="flex items-center gap-2 p-2 rounded-[var(--radius)] bg-[var(--error)]/10">
+              <AlertCircle className="h-4 w-4 text-[var(--error)] shrink-0" />
+              <span className="text-xs text-[var(--error)]">
+                {activeDownloadValues
+                  .filter((d) => d.status === 'error')
+                  .map((d) => `${d.name}: ${d.message}`)
+                  .join('; ')}
+              </span>
+            </div>
+          )}
+
+          {/* DiT Models */}
+          {ditModels.length > 0 && (
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-2 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">
+                <HardDrive className="h-3.5 w-3.5" />
+                DiT Models
+              </div>
+              {ditModels.map((m) => (
+                <div
+                  key={m.repo_id}
+                  className={clsx(
+                    'flex items-center justify-between p-3 rounded-[var(--radius)]',
+                    'border transition-colors',
+                    m.installed
+                      ? 'border-[var(--success)]/30 bg-[var(--success)]/5'
+                      : 'border-[var(--border)] bg-[var(--bg-tertiary)] hover:border-[var(--border-hover)]',
+                  )}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <Cpu className="h-4 w-4 text-[var(--text-muted)] shrink-0" />
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-sm font-medium text-[var(--text-primary)] truncate">
+                        {m.name}
+                      </span>
+                      <span className="text-xs text-[var(--text-muted)]">
+                        {m.description} &middot; {m.size_gb} GB
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {m.model_type && (
+                      <Badge variant={m.model_type === 'turbo' ? 'accent' : m.model_type === 'base' ? 'default' : 'warning'}>
+                        {m.model_type}
+                      </Badge>
+                    )}
+                    {m.installed ? (
+                      <Badge variant="success">Installed</Badge>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => handleStartDownload(m)}
+                        disabled={hasActiveDownload || isDirty}
+                      >
+                        <Download className="h-3 w-3" />
+                        Download
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* LM Models */}
+          {lmModels.length > 0 && (
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-2 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">
+                <Brain className="h-3.5 w-3.5" />
+                Language Models
+              </div>
+              {lmModels.map((m) => (
+                <div
+                  key={m.repo_id}
+                  className={clsx(
+                    'flex items-center justify-between p-3 rounded-[var(--radius)]',
+                    'border transition-colors',
+                    m.installed
+                      ? 'border-[var(--success)]/30 bg-[var(--success)]/5'
+                      : 'border-[var(--border)] bg-[var(--bg-tertiary)] hover:border-[var(--border-hover)]',
+                  )}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <Brain className="h-4 w-4 text-[var(--text-muted)] shrink-0" />
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-sm font-medium text-[var(--text-primary)] truncate">
+                        {m.name}
+                      </span>
+                      <span className="text-xs text-[var(--text-muted)]">
+                        {m.description} &middot; {m.size_gb} GB
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {m.installed ? (
+                      <Badge variant="success">Installed</Badge>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => handleStartDownload(m)}
+                        disabled={hasActiveDownload || isDirty}
+                      >
+                        <Download className="h-3 w-3" />
+                        Download
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Bundle (show only if nothing is installed) */}
+          {bundleModel && !bundleModel.installed && hasEssential && (
+            <div className="flex items-center gap-2 p-2 rounded-[var(--radius)] bg-[var(--bg-tertiary)]">
+              <Package className="h-4 w-4 text-[var(--text-muted)]" />
+              <span className="text-xs text-[var(--text-muted)]">
+                Tip: Use &ldquo;{bundleModel.name}&rdquo; to download all essential components at once ({bundleModel.size_gb} GB).
+              </span>
+            </div>
+          )}
+
+          {downloadableModels.length === 0 && (
+            <div className="flex flex-col items-center gap-2 py-6 text-center">
+              <Download className="h-8 w-8 text-[var(--text-muted)]" />
+              <p className="text-sm text-[var(--text-muted)]">
+                Loading available models...
+              </p>
+            </div>
           )}
         </div>
       </Card>

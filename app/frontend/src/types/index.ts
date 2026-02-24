@@ -106,3 +106,16 @@ export interface GenerationJob {
   message: string;
   tracks: TrackInfo[];
 }
+
+// ── Downloads ──────────────────────────────────────────────────────────────
+
+export interface DownloadJob {
+  id: string;
+  repoId: string;
+  name: string;
+  status: "downloading" | "complete" | "error" | "cancelled";
+  percent: number;
+  downloadedGb: number;
+  totalGb: number;
+  message: string;
+}

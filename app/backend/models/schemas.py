@@ -263,3 +263,26 @@ class SSEStemComplete(BaseModel):
 class SSEError(BaseModel):
     type: str = "error"
     message: str = ""
+
+
+# ── Downloads ───────────────────────────────────────────────────────────────
+
+
+class DownloadableModel(BaseModel):
+    repo_id: str
+    name: str
+    description: str
+    type: str = ""           # "dit", "lm", "bundle"
+    model_type: str = ""     # "turbo", "base", "sft"
+    size_gb: float = 0.0
+    installed: bool = False
+
+
+class DownloadableListResponse(BaseModel):
+    models: list[DownloadableModel] = []
+    checkpoint_dir: str = ""
+    has_essential: bool = False
+
+
+class StartDownloadRequest(BaseModel):
+    repo_id: str

@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { ModelStatusResponse, AdapterListResponse } from '../types/api'
+import type { DownloadJob } from '../types'
 import {
   getModelStatus,
   listAdapters,
@@ -8,6 +9,13 @@ import {
   unloadAdapter as apiUnloadAdapter,
   updateAdapterConfig as apiUpdateAdapterConfig,
 } from '../api/models'
+import {
+  getDownloadableModels,
+  startDownload as apiStartDownload,
+  cancelDownload as apiCancelDownload,
+  subscribeToDownloadProgress,
+  type DownloadableModel,
+} from '../api/downloads'
 
 interface SettingsState {
   modelStatus: ModelStatusResponse | null
@@ -16,6 +24,11 @@ interface SettingsState {
 
   /** Style tags (trigger words) keyed by adapter path. */
   adapterStyleTags: Record<string, string>
+
+  // ── Downloads ────────────────────────────────────────────────────────
+  downloadableModels: DownloadableModel[]
+  hasEssential: boolean
+  activeDownloads: Record<string, DownloadJob>
 
   fetchModelStatus: () => Promise<void>
   fetchAdapterList: () => Promise<void>
@@ -32,6 +45,11 @@ interface SettingsState {
    * "Active" means: adapter is loaded AND enabled AND has a non-empty tag.
    */
   getActiveStyleTag: () => string
+
+  // ── Download actions ────────────────────────────────────────────────
+  fetchDownloadable: () => Promise<void>
+  startModelDownload: (repoId: string, name: string, sizeGb: number) => Promise<void>
+  cancelModelDownload: (jobId: string) => Promise<void>
 }
 
 export const useSettingsStore = create<SettingsState>((set, get) => ({
@@ -39,6 +57,9 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   adapterList: null,
   loading: false,
   adapterStyleTags: {},
+  downloadableModels: [],
+  hasEssential: false,
+  activeDownloads: {},
 
   fetchModelStatus: async () => {
     set({ loading: true })
@@ -123,5 +144,95 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     const current = adapterList?.current
     if (!current?.loaded || !current.active || !current.path) return ''
     return (adapterStyleTags[current.path] ?? '').trim()
+  },
+
+  // ── Download actions ────────────────────────────────────────────────
+
+  fetchDownloadable: async () => {
+    try {
+      const data = await getDownloadableModels()
+      set({
+        downloadableModels: data.models,
+        hasEssential: data.has_essential,
+      })
+    } catch (err) {
+      console.error('Failed to fetch downloadable models:', err)
+    }
+  },
+
+  startModelDownload: async (repoId: string, name: string, sizeGb: number) => {
+    try {
+      const { job_id } = await apiStartDownload(repoId)
+
+      // Create optimistic job entry
+      const job: DownloadJob = {
+        id: job_id,
+        repoId,
+        name,
+        status: 'downloading',
+        percent: 0,
+        downloadedGb: 0,
+        totalGb: sizeGb,
+        message: `Starting download of ${name}...`,
+      }
+
+      set((state) => ({
+        activeDownloads: { ...state.activeDownloads, [job_id]: job },
+      }))
+
+      // Subscribe to SSE progress
+      subscribeToDownloadProgress(job_id, (event) => {
+        set((state) => {
+          const existing = state.activeDownloads[job_id]
+          if (!existing) return state
+
+          const updated = { ...existing }
+
+          if (event.type === 'progress') {
+            updated.percent = event.percent ?? updated.percent
+            updated.downloadedGb = event.downloaded_gb ?? updated.downloadedGb
+            updated.totalGb = event.total_gb ?? updated.totalGb
+            updated.message = event.message ?? updated.message
+          } else if (event.type === 'complete') {
+            updated.status = 'complete'
+            updated.percent = 100
+            updated.message = event.message ?? 'Download complete'
+            // Refresh model list and downloadable list after completion
+            setTimeout(() => {
+              get().fetchModelStatus()
+              get().fetchDownloadable()
+            }, 500)
+          } else if (event.type === 'error') {
+            updated.status = 'error'
+            updated.message = event.message ?? 'Download failed'
+          }
+
+          return {
+            activeDownloads: { ...state.activeDownloads, [job_id]: updated },
+          }
+        })
+      })
+    } catch (err) {
+      console.error('Failed to start download:', err)
+      throw err
+    }
+  },
+
+  cancelModelDownload: async (jobId: string) => {
+    try {
+      await apiCancelDownload(jobId)
+      set((state) => {
+        const existing = state.activeDownloads[jobId]
+        if (!existing) return state
+        return {
+          activeDownloads: {
+            ...state.activeDownloads,
+            [jobId]: { ...existing, status: 'cancelled', message: 'Download cancelled' },
+          },
+        }
+      })
+    } catch (err) {
+      console.error('Failed to cancel download:', err)
+    }
   },
 }))
