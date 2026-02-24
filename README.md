@@ -264,4 +264,4 @@ curl -X POST http://127.0.0.1:3456/api/generate \
 
 ## License
 
-MIT
+Apache 2.0 — see [LICENSE](LICENSE)
