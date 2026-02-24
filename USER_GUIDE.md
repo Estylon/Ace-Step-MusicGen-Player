@@ -9,18 +9,21 @@ A complete guide to using the ACE-Step MusicGen Player for music generation, mod
 1. [Installation](#installation)
 2. [First Launch & Configuration](#first-launch--configuration)
 3. [Generating Music](#generating-music)
-4. [AutoGen (Automatic Generation)](#autogen-automatic-generation)
-5. [Model Management](#model-management)
-6. [LoRA & LoKr Adapters](#lora--lokr-adapters)
-7. [Style Tags & Trigger Words](#style-tags--trigger-words)
-8. [Stem Separation](#stem-separation)
-9. [Player & Playback](#player--playback)
-10. [Queue](#queue)
-11. [Favorites & Rating](#favorites--rating)
-12. [Library](#library)
-13. [Settings](#settings)
-14. [Keyboard Shortcuts](#keyboard-shortcuts)
-15. [Troubleshooting](#troubleshooting)
+4. [Generation Presets](#generation-presets)
+5. [AutoGen (Automatic Generation)](#autogen-automatic-generation)
+6. [Model Management](#model-management)
+7. [LoRA & LoKr Adapters](#lora--lokr-adapters)
+8. [Style Tags & Trigger Words](#style-tags--trigger-words)
+9. [Stem Separation](#stem-separation)
+10. [Player & Playback](#player--playback)
+11. [Queue](#queue)
+12. [Favorites & Rating](#favorites--rating)
+13. [Library](#library)
+14. [Parameter Recall](#parameter-recall)
+15. [Batch Export with Mastering](#batch-export-with-mastering)
+16. [Settings](#settings)
+17. [Keyboard Shortcuts](#keyboard-shortcuts)
+18. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -212,6 +215,39 @@ Generated audio files are automatically named after your track title:
 - If you edit the title later (in results or library), the file on disk is also renamed to match
 - Invalid filename characters are automatically sanitized
 - If a file with the same name already exists, a short ID suffix is appended to avoid collisions
+
+---
+
+## Generation Presets
+
+Presets let you save and recall your favorite generation settings so you can quickly switch between different styles, configurations, or workflows.
+
+### Saving a Preset
+
+1. Configure all your generation parameters as desired (caption, diffusion settings, LM settings, etc.)
+2. Click the **"Presets"** dropdown button in the Generate page toolbar (next to Import/Export/Reset)
+3. Click **"Save current settings as preset"**
+4. Enter a name for your preset (e.g. "Lo-fi Chill", "Epic Orchestral", "Fast Draft")
+5. Click **Save**
+
+### Loading a Preset
+
+1. Click the **"Presets"** dropdown
+2. Click the preset name to load it
+3. All generation parameters are instantly replaced with the saved values
+
+### Managing Presets
+
+- **Overwrite** — Hover over a preset and click the save icon to overwrite it with the current settings
+- **Delete** — Hover over a preset and click the trash icon. Click again to confirm deletion
+- **Count badge** — The Presets button shows a count of how many presets you have saved
+
+### Tips
+
+- Presets save all generation parameters: caption, lyrics, diffusion settings, LM settings, batch size, format, etc.
+- Presets do NOT save the model or adapter selection — these are managed separately
+- You can also use the **Import/Export** buttons for JSON-based preset sharing with other users
+- The preset counter badge in the toolbar shows how many presets are available
 
 ---
 
@@ -508,6 +544,88 @@ Features:
 - **Track Detail** — Click a track to see full metadata, generation parameters, and stems
 - **Delete** — Remove tracks and their associated files
 - **Inline title editing** — Rename tracks directly from the card (also renames the audio file on disk)
+- **Multi-select** — Select multiple tracks for batch export (see [Batch Export with Mastering](#batch-export-with-mastering))
+- **Parameter recall** — Reload a track's generation settings (see [Parameter Recall](#parameter-recall))
+
+---
+
+## Parameter Recall
+
+Parameter recall lets you reload the exact generation settings used to create any track in your library, making it easy to reproduce or iterate on a particular style.
+
+### How to Use
+
+**From a Track Card:**
+1. In the Library, find a track you want to recreate
+2. Click the **"Recall"** button (circular arrow icon) in the track card's action bar
+3. The app navigates to the Generate page with all parameters loaded
+
+**From Track Detail:**
+1. Click on a track to open the detail slide-over panel
+2. Click the **"Recall"** button in the footer action bar
+3. The panel closes and the app navigates to the Generate page with parameters loaded
+
+### What Gets Recalled
+
+All generation parameters stored in the track's `params_json` are restored:
+- Caption, lyrics, instrumental flag
+- BPM, key/scale, time signature, language, duration
+- Diffusion settings (steps, guidance scale, seed, shift, method, ADG, CFG interval)
+- LM settings (thinking, temperature, top-k, top-p, negative prompt, CoT options)
+- Task type, batch size, audio format
+
+### Tips
+
+- The Recall button only appears on tracks that have saved generation parameters (most tracks created in v0.3.0+)
+- After recall, the seed is loaded as-is — change it to -1 (random) if you want variations rather than exact reproduction
+- Recall does NOT switch your model or adapter — you'll need to match those manually if they differ from what was originally used
+
+---
+
+## Batch Export with Mastering
+
+Export multiple tracks from your library as professionally mastered WAV files, ready for digital distribution on platforms like Spotify, Apple Music, DistroKid, and others.
+
+### Mastering Specs
+
+Every exported track is automatically mastered with these settings:
+
+| Parameter | Value | Standard |
+|---|---|---|
+| **Integrated Loudness** | -14 LUFS | Spotify, YouTube, Apple Music target |
+| **True Peak Ceiling** | -1.0 dBTP | Prevents inter-sample clipping |
+| **Sample Rate** | 44,100 Hz | CD quality / streaming standard |
+| **Bit Depth** | 16-bit PCM | Standard WAV format |
+
+### How to Export
+
+1. Go to the **Library** page
+2. Click the **"Select"** button in the header to enter multi-select mode
+3. Click on tracks to select them — selected tracks show a ring highlight and checkbox
+4. Use **"Select All"** / **"Deselect All"** to manage selections quickly
+5. Click **"Export WAV"** to start the mastering and export process
+6. Wait for the mastering process to complete (a loading spinner shows progress)
+7. A ZIP file named `mastered_export.zip` is automatically downloaded to your browser's download folder
+
+### What Happens During Export
+
+For each selected track, the mastering service:
+
+1. **Reads** the source audio file (FLAC, WAV, MP3, etc.)
+2. **Resamples** to 44.1 kHz if the source has a different sample rate
+3. **Normalizes** the integrated loudness to -14 LUFS using K-weighted measurement
+4. **Limits** the true peak level to -1.0 dBTP using 4x oversampled peak detection
+5. **Writes** a 16-bit PCM WAV file
+
+All mastered files are packaged into a single ZIP archive for convenient download.
+
+### Tips
+
+- The mastering process is non-destructive — your original files are never modified
+- Export up to 50 tracks at once
+- File names in the ZIP match the track titles (sanitized for filesystem compatibility)
+- If multiple tracks share the same title, a numeric suffix is appended automatically
+- For custom mastering settings (different LUFS target, peak ceiling, or sample rate), use the API directly: `POST /api/export/batch`
 
 ---
 

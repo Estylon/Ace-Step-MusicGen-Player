@@ -39,12 +39,29 @@ It's opinionated — designed to pair with [my ACE-Step LoRA Trainer](https://gi
 - **Premium result cards** — animated waveform with playback progress overlay, editable track titles, play state badges, favorites heart, star rating
 - **Track naming** — name your tracks before generation or edit titles inline after. Audio files on disk are automatically renamed to match the track title
 
+### Presets & Parameter Recall
+
+- **Saveable presets** — Save, load, overwrite, and delete named generation presets from the PresetSelector dropdown in the Generate page toolbar
+- **Parameter recall** — "Recall" button on every Library track card loads the track's original generation parameters back into the Generate form
+- **JSON import/export** — Import presets from JSON files or export current settings for sharing
+
+### Batch Export with Mastering
+
+- **Multi-select mode** in Library — select multiple tracks with checkboxes
+- **Export WAV** — batch export selected tracks as mastered WAV files in a ZIP archive
+- **Digital store mastering** — automatic LUFS normalization (-14 LUFS), true-peak limiting (-1.0 dBTP), 44.1 kHz 16-bit PCM WAV — ready for Spotify, Apple Music, DistroKid, etc.
+
 ### Favorites, Rating & AutoGen
 
 - **Favorites** — heart toggle on every track card (library + generation results), filter library by favorites
 - **Star rating** — 5-star rating on every track, sort library by rating
 - **AutoGen** — automatic continuous generation with configurable max runs, auto-randomizes seed between runs
 - **Title-based filenames** — generated audio files use the track title as filename, not UUIDs
+
+### Model Download
+
+- **Download Models from HuggingFace** — download official ACE-Step models directly from the Settings page when no models are present
+- Real-time download progress with SSE streaming
 
 ### Stem Separation
 
@@ -55,6 +72,8 @@ It's opinionated — designed to pair with [my ACE-Step LoRA Trainer](https://gi
 ### Library & Settings
 
 - **SQLite-backed generation library** with search, sort, favorites filter, rating sort, and full metadata
+- **Multi-select** — batch select tracks in Library for export
+- **Parameter recall** — reload any track's generation settings with one click
 - **Customizable paths** — all model, checkpoint, LoRA, and output directories configurable through the UI
 - **Native OS folder picker** for all path settings
 - **Persistent settings** across sessions
@@ -206,8 +225,8 @@ Models are downloaded automatically on first use (~1.8GB total).
 Ace-Step-MusicGen-Player/
   app/
     backend/           Python FastAPI server
-      api/             Route modules (generate, stems, models, lora, library, gpu, audio, settings)
-      services/        Business logic (inference, stem separation, library, audio)
+      api/             Route modules (generate, stems, models, lora, library, gpu, audio, settings, presets, export, downloads)
+      services/        Business logic (inference, stem separation, library, audio, presets, mastering, downloads)
       models/          Pydantic schemas + SQLite database
     frontend/          React 19 + TypeScript 5 + TailwindCSS v4
       src/
@@ -242,6 +261,13 @@ Interactive docs at **http://127.0.0.1:3456/docs** when running.
 | `/api/lora/scan` | POST | Re-scan adapter directories |
 | `/api/library` | GET | List tracks (supports `favorite` filter, `rating` sort) |
 | `/api/library/{id}` | GET/PATCH/DELETE | Track detail / update (title, favorite, rating) / delete |
+| `/api/presets` | GET/POST | List / create generation presets |
+| `/api/presets/{id}` | GET/PUT/DELETE | Get / update / delete a preset |
+| `/api/export/batch` | POST | Batch export mastered WAV files (ZIP) |
+| `/api/downloads/available` | GET | List downloadable HuggingFace models |
+| `/api/downloads/start` | POST | Start model download |
+| `/api/downloads/{id}/progress` | GET (SSE) | Download progress stream |
+| `/api/downloads/{id}/cancel` | POST | Cancel active download |
 | `/api/gpu/status` | GET | GPU VRAM status |
 | `/api/settings` | GET/PUT | User settings |
 

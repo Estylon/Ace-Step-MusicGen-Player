@@ -4,6 +4,61 @@ All notable changes to ACE-Step MusicGen Player.
 
 ---
 
+## [0.5.0] — 2026-02-24
+
+### Added — Saveable Generation Presets
+- **Presets system** — Save, load, overwrite, and delete named generation presets directly from the Generate page
+- **PresetSelector dropdown** in the Generate page toolbar with save-new, one-click load, overwrite, and delete actions
+- **Backend**: SQLite `presets` table with full CRUD service + REST API (`GET/POST/PUT/DELETE /api/presets`)
+- **Frontend**: Zustand preset store, typed API client, PresetSelector component with dropdown UI
+
+### Added — Parameter Recall from Library
+- **Recall button** on every TrackCard in the Library — loads the track's original generation parameters back into the Generate form and navigates to the Generate page
+- **Recall button** in the TrackDetail slide-over panel footer
+- Uses the existing `parsePreset` logic with alias support for robust field mapping from `params_json`
+
+### Added — Batch Export with Digital Store Mastering
+- **Mastering service** — Applies broadcast-ready mastering to audio tracks:
+  - **LUFS normalization** to -14 LUFS (ITU-R BS.1770-4 simplified K-weighting)
+  - **True-peak limiting** to -1.0 dBTP (4x oversampled detection)
+  - **Resampling** to 44.1 kHz
+  - **Output**: 16-bit PCM WAV — ready for Spotify, Apple Music, DistroKid, etc.
+- **Batch export endpoint** — `POST /api/export/batch` accepts track IDs, masters each track, returns a ZIP archive
+- **Multi-select mode** in Library — "Select" toggle in the header enables checkbox selection on track cards
+  - Select All / Deselect All controls
+  - Visual ring highlight on selected cards with checkbox indicators
+  - **"Export WAV"** button downloads a ZIP of all selected tracks, mastered for digital distribution
+  - Loading spinner during mastering with error display
+
+### Added — Model Download from HuggingFace
+- **Download Models section** in Settings — lists all official ACE-Step HuggingFace repos
+- Real-time download progress bars with SSE streaming
+- Auto-refresh model list after download completion
+- Download CTA when no models are present
+
+### Fixed
+- Demucs stem separation on Python 3.13+ (diffq stub)
+- Stem separation file path resolution for two-pass mode
+- beartype upgrade for Python 3.13+ compatibility
+
+### Changed — Backend
+- Database schema: new `presets` table (id, name, params_json, created_at, updated_at)
+- New services: `preset_service.py`, `mastering_service.py`, `download_service.py`
+- New API routers: `presets.py`, `export.py`, `downloads.py`
+- New schemas: `PresetInfo`, `PresetCreateRequest`, `PresetUpdateRequest`, `BatchExportRequest`, download schemas
+
+### Changed — Frontend
+- New components: `PresetSelector` dropdown in Generate page header
+- `TrackCard` — Added "Recall" button and multi-select checkbox overlay
+- `TrackDetail` — Added "Recall" button in footer
+- `LibraryPage` — Added multi-select mode with Select/Deselect All, Export WAV button, action bar
+- `useGenerationStore` — Added `recallParams()` method
+- `useLibraryStore` — Added `multiSelectMode`, `selectedIds`, `setMultiSelectMode`, `toggleSelected`, `selectAll`, `clearSelection`
+- New stores: `usePresetStore`
+- New API modules: `presets.ts`, `export.ts`
+
+---
+
 ## [0.4.0] — 2025-02-24
 
 ### Added — Amber/Gold Color Scheme
