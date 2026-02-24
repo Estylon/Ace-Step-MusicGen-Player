@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Library, Search, ChevronLeft, ChevronRight, Heart, CheckSquare, Square, Download, X, Loader2 } from 'lucide-react'
+import { Library, Search, ChevronLeft, ChevronRight, Heart, CheckSquare, Square, Download, Music, X, Loader2 } from 'lucide-react'
 import clsx from 'clsx'
 import Select from '../ui/Select'
 import TrackCard from './TrackCard'
@@ -49,13 +49,17 @@ export default function LibraryPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const handleExport = async () => {
+  const handleExport = async (format: 'wav' | 'mp3' = 'wav') => {
     if (selectedCount === 0) return
     setExporting(true)
     setExportError(null)
     try {
-      const blob = await batchExport({ trackIds: Array.from(selectedIds) })
-      downloadBlob(blob, 'mastered_export.zip')
+      const blob = await batchExport({
+        trackIds: Array.from(selectedIds),
+        format,
+      })
+      const filename = format === 'mp3' ? 'mp3_export.zip' : 'mastered_export.zip'
+      downloadBlob(blob, filename)
       // Success — exit multi-select mode
       setMultiSelectMode(false)
     } catch (err) {
@@ -181,7 +185,7 @@ export default function LibraryPage() {
           )}
 
           <button
-            onClick={handleExport}
+            onClick={() => handleExport('wav')}
             disabled={selectedCount === 0 || exporting}
             className={clsx(
               'flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius)] text-xs font-medium',
@@ -196,7 +200,27 @@ export default function LibraryPage() {
             ) : (
               <Download className="h-3.5 w-3.5" />
             )}
-            {exporting ? 'Mastering...' : 'Export WAV'}
+            {exporting ? 'Exporting...' : 'Export WAV'}
+          </button>
+
+          <button
+            onClick={() => handleExport('mp3')}
+            disabled={selectedCount === 0 || exporting}
+            className={clsx(
+              'flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius)] text-xs font-medium',
+              'bg-[var(--bg-secondary)] text-[var(--text-primary)]',
+              'border border-[var(--border)]',
+              'hover:bg-[var(--bg-hover)] hover:border-[var(--border-hover)]',
+              'disabled:opacity-40 disabled:pointer-events-none',
+              'transition-colors',
+            )}
+          >
+            {exporting ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Music className="h-3.5 w-3.5" />
+            )}
+            {exporting ? 'Exporting...' : 'Export MP3'}
           </button>
 
           <button

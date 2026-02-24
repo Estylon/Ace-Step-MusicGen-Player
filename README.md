@@ -49,7 +49,8 @@ It's opinionated — designed to pair with [my ACE-Step LoRA Trainer](https://gi
 
 - **Multi-select mode** in Library — select multiple tracks with checkboxes
 - **Export WAV** — batch export selected tracks as mastered WAV files in a ZIP archive
-- **Digital store mastering** — automatic LUFS normalization (-14 LUFS), true-peak limiting (-1.0 dBTP), 44.1 kHz 16-bit PCM WAV — ready for Spotify, Apple Music, DistroKid, etc.
+- **Export MP3** — batch export selected tracks as mastered MP3 files in a ZIP archive
+- **Digital store mastering** — automatic LUFS normalization (-14 LUFS), true-peak limiting (-1.0 dBTP), 44.1 kHz resampling — applied to both WAV and MP3 exports
 
 ### Favorites, Rating & AutoGen
 
@@ -263,7 +264,7 @@ Interactive docs at **http://127.0.0.1:3456/docs** when running.
 | `/api/library/{id}` | GET/PATCH/DELETE | Track detail / update (title, favorite, rating) / delete |
 | `/api/presets` | GET/POST | List / create generation presets |
 | `/api/presets/{id}` | GET/PUT/DELETE | Get / update / delete a preset |
-| `/api/export/batch` | POST | Batch export mastered WAV files (ZIP) |
+| `/api/export/batch` | POST | Batch export mastered WAV or MP3 files (ZIP) |
 | `/api/downloads/available` | GET | List downloadable HuggingFace models |
 | `/api/downloads/start` | POST | Start model download |
 | `/api/downloads/{id}/progress` | GET (SSE) | Download progress stream |

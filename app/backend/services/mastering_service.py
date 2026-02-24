@@ -244,6 +244,34 @@ def master_track(
     return output_path
 
 
+# ── MP3 Encoding ────────────────────────────────────────────────────────────
+
+
+def encode_mp3(audio: np.ndarray, sr: int, bitrate: int = 320) -> bytes:
+    """Encode a float64 numpy audio array to MP3 bytes via soundfile (libsndfile ≥ 1.1.0).
+
+    Parameters:
+        audio: float64 array, shape (samples,) or (samples, channels)
+        sr: sample rate
+        bitrate: Ignored for now (libsndfile uses default VBR quality).
+                 Kept in the signature for API compatibility.
+
+    Returns:
+        bytes containing the MP3 data.
+    """
+    buf = io.BytesIO()
+    sf.write(buf, audio, sr, format="MP3")
+    mp3_data = buf.getvalue()
+
+    n_channels = 1 if audio.ndim == 1 else audio.shape[1]
+    logger.info(
+        "  MP3 encode: %d ch, %d Hz → %.1f KB",
+        n_channels, sr, len(mp3_data) / 1024,
+    )
+
+    return mp3_data
+
+
 def master_track_to_bytes(
     input_path: str | Path,
     target_lufs: float = TARGET_LUFS,

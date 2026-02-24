@@ -317,3 +317,5 @@ class BatchExportRequest(BaseModel):
     target_lufs: float = Field(-14.0, ge=-30.0, le=0.0)
     true_peak_db: float = Field(-1.0, ge=-6.0, le=0.0)
     sample_rate: int = Field(44100, ge=22050, le=96000)
+    format: str = Field("wav", pattern=r"^(wav|mp3)$")
+    mp3_bitrate: int = Field(320, ge=128, le=320)

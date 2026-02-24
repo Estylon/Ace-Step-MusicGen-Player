@@ -22,13 +22,14 @@ All notable changes to ACE-Step MusicGen Player.
   - **LUFS normalization** to -14 LUFS (ITU-R BS.1770-4 simplified K-weighting)
   - **True-peak limiting** to -1.0 dBTP (4x oversampled detection)
   - **Resampling** to 44.1 kHz
-  - **Output**: 16-bit PCM WAV — ready for Spotify, Apple Music, DistroKid, etc.
-- **Batch export endpoint** — `POST /api/export/batch` accepts track IDs, masters each track, returns a ZIP archive
+  - **Output**: 16-bit PCM WAV or MP3
+- **Batch export endpoint** — `POST /api/export/batch` accepts track IDs + format (wav/mp3), masters each track, returns a ZIP archive
 - **Multi-select mode** in Library — "Select" toggle in the header enables checkbox selection on track cards
   - Select All / Deselect All controls
   - Visual ring highlight on selected cards with checkbox indicators
-  - **"Export WAV"** button downloads a ZIP of all selected tracks, mastered for digital distribution
-  - Loading spinner during mastering with error display
+  - **"Export WAV"** button downloads a ZIP of mastered WAV tracks for digital distribution
+  - **"Export MP3"** button downloads a ZIP of mastered MP3 tracks for sharing and personal use
+  - Loading spinner during export with error display
 
 ### Added — Model Download from HuggingFace
 - **Download Models section** in Settings — lists all official ACE-Step HuggingFace repos

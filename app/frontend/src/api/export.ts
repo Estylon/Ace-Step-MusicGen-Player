@@ -1,5 +1,5 @@
 /**
- * Batch export API — mastered WAV files for digital store delivery.
+ * Batch export API — mastered WAV / MP3 files for digital store delivery.
  */
 
 const API_BASE = '/api'
@@ -9,10 +9,12 @@ export interface BatchExportOptions {
   targetLufs?: number
   truePeakDb?: number
   sampleRate?: number
+  format?: 'wav' | 'mp3'
+  mp3Bitrate?: number
 }
 
 /**
- * Request batch export of tracks as mastered WAV files.
+ * Request batch export of tracks as mastered WAV or MP3 files.
  * Returns a Blob containing a ZIP archive.
  */
 export async function batchExport(options: BatchExportOptions): Promise<Blob> {
@@ -24,6 +26,8 @@ export async function batchExport(options: BatchExportOptions): Promise<Blob> {
       target_lufs: options.targetLufs ?? -14.0,
       true_peak_db: options.truePeakDb ?? -1.0,
       sample_rate: options.sampleRate ?? 44100,
+      format: options.format ?? 'wav',
+      mp3_bitrate: options.mp3Bitrate ?? 320,
     }),
   })
 

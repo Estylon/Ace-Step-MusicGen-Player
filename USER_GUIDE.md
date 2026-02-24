@@ -584,7 +584,7 @@ All generation parameters stored in the track's `params_json` are restored:
 
 ## Batch Export with Mastering
 
-Export multiple tracks from your library as professionally mastered WAV files, ready for digital distribution on platforms like Spotify, Apple Music, DistroKid, and others.
+Export multiple tracks from your library as professionally mastered WAV or MP3 files. WAV exports are ready for digital distribution on platforms like Spotify, Apple Music, and DistroKid. MP3 exports are ideal for sharing, personal listening, or uploading to platforms that accept lossy formats.
 
 ### Mastering Specs
 
@@ -595,7 +595,8 @@ Every exported track is automatically mastered with these settings:
 | **Integrated Loudness** | -14 LUFS | Spotify, YouTube, Apple Music target |
 | **True Peak Ceiling** | -1.0 dBTP | Prevents inter-sample clipping |
 | **Sample Rate** | 44,100 Hz | CD quality / streaming standard |
-| **Bit Depth** | 16-bit PCM | Standard WAV format |
+| **Bit Depth (WAV)** | 16-bit PCM | Standard WAV format |
+| **Format (MP3)** | MP3 | Compressed format for sharing |
 
 ### How to Export
 
@@ -603,9 +604,9 @@ Every exported track is automatically mastered with these settings:
 2. Click the **"Select"** button in the header to enter multi-select mode
 3. Click on tracks to select them — selected tracks show a ring highlight and checkbox
 4. Use **"Select All"** / **"Deselect All"** to manage selections quickly
-5. Click **"Export WAV"** to start the mastering and export process
-6. Wait for the mastering process to complete (a loading spinner shows progress)
-7. A ZIP file named `mastered_export.zip` is automatically downloaded to your browser's download folder
+5. Click **"Export WAV"** for lossless mastered WAV files, or **"Export MP3"** for compressed MP3 files
+6. Wait for the mastering and encoding process to complete (a loading spinner shows progress)
+7. A ZIP file is automatically downloaded to your browser's download folder
 
 ### What Happens During Export
 
@@ -615,7 +616,7 @@ For each selected track, the mastering service:
 2. **Resamples** to 44.1 kHz if the source has a different sample rate
 3. **Normalizes** the integrated loudness to -14 LUFS using K-weighted measurement
 4. **Limits** the true peak level to -1.0 dBTP using 4x oversampled peak detection
-5. **Writes** a 16-bit PCM WAV file
+5. **Writes** a 16-bit PCM WAV file, or **encodes** to MP3 (depending on the chosen format)
 
 All mastered files are packaged into a single ZIP archive for convenient download.
 
