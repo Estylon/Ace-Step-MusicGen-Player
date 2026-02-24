@@ -9,15 +9,18 @@ A complete guide to using the ACE-Step MusicGen Player for music generation, mod
 1. [Installation](#installation)
 2. [First Launch & Configuration](#first-launch--configuration)
 3. [Generating Music](#generating-music)
-4. [Model Management](#model-management)
-5. [LoRA & LoKr Adapters](#lora--lokr-adapters)
-6. [Style Tags & Trigger Words](#style-tags--trigger-words)
-7. [Stem Separation](#stem-separation)
-8. [Player & Playback](#player--playback)
-9. [Library](#library)
-10. [Settings](#settings)
-11. [Keyboard Shortcuts](#keyboard-shortcuts)
-12. [Troubleshooting](#troubleshooting)
+4. [AutoGen (Automatic Generation)](#autogen-automatic-generation)
+5. [Model Management](#model-management)
+6. [LoRA & LoKr Adapters](#lora--lokr-adapters)
+7. [Style Tags & Trigger Words](#style-tags--trigger-words)
+8. [Stem Separation](#stem-separation)
+9. [Player & Playback](#player--playback)
+10. [Queue](#queue)
+11. [Favorites & Rating](#favorites--rating)
+12. [Library](#library)
+13. [Settings](#settings)
+14. [Keyboard Shortcuts](#keyboard-shortcuts)
+15. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -198,7 +201,47 @@ After generation completes, result cards appear with:
 - **Play/Pause overlay** — click anywhere on the waveform to play
 - **Editable title** — click the pencil icon to rename inline (Enter to save, Escape to cancel)
 - **Status badges** — "Playing" or "Paused" indicators
-- **Active track glow** — purple glow on the currently playing card
+- **Active track glow** — amber glow on the currently playing card
+- **Favorite toggle** — heart icon on each result card to mark as favorite (persists to library)
+- **Star rating** — 5-star rating on each result card (persists to library)
+
+### Title-Based Filenames
+
+Generated audio files are automatically named after your track title:
+- A caption like "Upbeat electronic dance music" produces a file named `Upbeat_electronic_dance_music.flac`
+- If you edit the title later (in results or library), the file on disk is also renamed to match
+- Invalid filename characters are automatically sanitized
+- If a file with the same name already exists, a short ID suffix is appended to avoid collisions
+
+---
+
+## AutoGen (Automatic Generation)
+
+AutoGen lets you run continuous, hands-free generation. After each track completes, a new generation starts automatically with a randomized seed.
+
+### How to Use
+
+1. Navigate to the **Generate** page
+2. Set up your generation parameters (caption, settings, etc.) as usual
+3. Find the **AutoGen** panel between the Generate button and results
+4. Toggle **AutoGen** on
+5. Set **Max runs** (0 = unlimited, or enter a number like 10)
+6. Click **Generate** to start the first run
+7. After each track completes, a new one starts automatically after a ~1.5 second delay
+
+### Controls
+
+- **Toggle switch** — Turn AutoGen on/off
+- **Max runs input** — Set a cap (0 = unlimited, shown as ∞)
+- **Run counter** — Shows "Run X / Y" in real-time
+- **Stop button** — Immediately halts the loop (current generation finishes, no new one starts)
+
+### Tips
+
+- AutoGen randomizes the seed between runs, so each track is different
+- All generated tracks appear in the results panel and are saved to the library
+- You can adjust other parameters between runs by turning AutoGen off, changing settings, then turning it back on
+- The counter resets when you toggle AutoGen off and on again
 
 ---
 
@@ -364,18 +407,20 @@ After separation, the multi-track player lets you:
 
 The player bar sits at the bottom of the screen and provides a full playback experience:
 
-- **Seek bar** — thin bar at the very top of the player; click or drag anywhere to seek
+- **Seek bar** — thin bar at the very top of the player; click anywhere to seek
 - **Album art area** — track artwork (or placeholder) on the left
-- **Track info** — title and artist/model info
+- **Track info** — title and caption/model info
 - **Transport controls** (center):
   - Shuffle toggle
   - Previous track
   - Play / Pause (large central button)
   - Next track
-  - Repeat toggle
+  - Repeat toggle (none → all → one)
 - **Time display** — current position and total duration
-- **Audio visualizer** — real-time frequency bars (purple gradient) driven by the Web Audio API AnalyserNode
-- **Volume control** — click the speaker icon to mute/unmute, hover/click to adjust volume
+- **Audio visualizer** — real-time frequency bars (amber/gold gradient) driven by the Web Audio API AnalyserNode
+- **Volume control** — click the speaker icon to mute/unmute, use the slider to adjust
+- **Queue button** — opens the queue panel (shows badge with track count)
+- **Expand button** (↑) — opens the full player overlay
 
 ### Audio Engine
 
@@ -385,12 +430,67 @@ The player uses a real audio engine under the hood:
 - The audio engine is a singleton — one instance shared across the entire app
 - All playback actions (play, pause, seek, volume) are synchronized between the UI state and the actual audio element
 
+### Full Player Overlay
+
+Click the expand button (↑) in the player bar to open a full-screen player view:
+
+- **Large audio visualizer** — 48-bar frequency visualization, much larger than the player bar version
+- **Track title and caption** — prominently displayed
+- **Metadata badges** — BPM, key, duration, model, seed
+- **Lyrics display** — scrollable lyrics panel (hidden for instrumental tracks)
+- **Full transport controls** — large play/pause, prev/next, shuffle, repeat
+- **Seek bar** — wide, prominent seek control with time labels
+- **Volume control** — dedicated volume slider
+- **Close button** (↓) — minimizes back to the player bar
+
 ### Playback from Generation Results
 
 Click any result card's waveform area to start playing that track. The card shows:
 - Animated waveform bars with a progress overlay
 - "Playing" / "Paused" badge
-- Purple glow effect on the active card
+- Amber glow effect on the active card
+
+---
+
+## Queue
+
+### Queue Panel
+
+Click the queue button (music list icon) in the player bar to open the queue panel:
+
+- **Track list** — shows all queued tracks with index number, title, and duration
+- **Now Playing indicator** — the current track is highlighted with amber color and "Now Playing" label
+- **Click to jump** — click any track in the queue to play it immediately
+- **Remove tracks** — hover over a track to reveal the remove button (×)
+- **Clear Queue** — remove all tracks from the queue at once
+
+### How Tracks Enter the Queue
+
+- **Playing a track** automatically adds it to the queue if it's not already there
+- **Play All** from the library sets the entire filtered list as the queue
+- The queue persists during the session but resets when you reload the app
+
+---
+
+## Favorites & Rating
+
+### Favorites
+
+Mark tracks as favorites using the heart icon:
+
+- **Heart toggle** — appears on every track card in both the Library and Generation Results
+- **Library filter** — click the "Favorites" button in the Library header to show only favorited tracks
+- **Persistence** — favorites are saved to the database and persist across sessions
+
+### Star Rating
+
+Rate tracks from 1 to 5 stars:
+
+- **Star rating** — appears on every track card in both Library and Generation Results
+- **Click to rate** — click a star to set the rating. Click the same star again to clear the rating (set to 0)
+- **Hover preview** — stars highlight on hover to show the rating you'd set
+- **Sort by rating** — use the sort dropdown in the Library to order tracks by rating
+- **Persistence** — ratings are saved to the database and persist across sessions
 
 ---
 
@@ -402,10 +502,12 @@ All generated tracks are automatically saved to the library. Access it via the *
 
 Features:
 - **Search** — Filter tracks by caption, title, or metadata
-- **Sort** — Order by date, duration, model, or name
-- **Track Cards** — Visual cards showing waveform preview, duration, model used, adapter info
+- **Sort** — Order by date, duration, BPM, name, or rating
+- **Favorites filter** — Toggle to show only favorited tracks
+- **Track Cards** — Visual cards showing waveform preview, duration, model used, adapter info, heart icon, star rating
 - **Track Detail** — Click a track to see full metadata, generation parameters, and stems
 - **Delete** — Remove tracks and their associated files
+- **Inline title editing** — Rename tracks directly from the card (also renames the audio file on disk)
 
 ---
 

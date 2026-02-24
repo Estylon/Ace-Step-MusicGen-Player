@@ -24,6 +24,8 @@ export interface TrackInfo {
   adapter_scale: number | null;
   task_type: string;
   params_json: string;
+  favorite: boolean;
+  rating: number; // 0-5
   created_at: string;
   peaks: number[] | null;
 }

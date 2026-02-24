@@ -1,6 +1,7 @@
 import { useEffect, type ReactNode } from 'react'
 import Sidebar from './Sidebar'
 import PlayerBar from './PlayerBar'
+import FullPlayer from '../player/FullPlayer'
 import { useSettingsStore } from '../../stores/useSettingsStore'
 import { useAudioEngine } from '../../hooks/useAudioEngine'
 
@@ -37,6 +38,9 @@ export default function AppShell({ children }: AppShellProps) {
 
       {/* Player bar fixed at bottom */}
       <PlayerBar />
+
+      {/* Full player overlay */}
+      <FullPlayer />
     </div>
   )
 }

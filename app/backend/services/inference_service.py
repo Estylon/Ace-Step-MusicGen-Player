@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import threading
 import time
 import traceback
@@ -901,16 +902,26 @@ class InferenceService:
         # Convert to TrackInfo objects
         tracks: list[TrackInfo] = []
         adapter_status = self.get_adapter_status()
-        for audio in result.audios:
+        for i, audio in enumerate(result.audios):
             track_id = str(uuid4())
-            audio_path = audio.get("path", "")
+            orig_audio_path = audio.get("path", "")
+            title = request.caption[:80] or f"Track {track_id[:8]}"
+
+            # Rename audio file to use the track title
+            audio_path = orig_audio_path
+            if orig_audio_path and os.path.isfile(orig_audio_path):
+                audio_path = _rename_audio_to_title(
+                    orig_audio_path, title, track_id[:8],
+                    suffix_index=i if len(result.audios) > 1 else None,
+                )
+
             filename = Path(audio_path).name if audio_path else ""
             duration = get_audio_duration(audio_path) if audio_path else 0.0
             peaks = compute_peaks(audio_path) if audio_path else None
 
             track = TrackInfo(
                 id=track_id,
-                title=request.caption[:80] or f"Track {track_id[:8]}",
+                title=title,
                 caption=request.caption,
                 lyrics=request.lyrics,
                 bpm=request.bpm,
@@ -932,3 +943,49 @@ class InferenceService:
             tracks.append(track)
 
         return tracks
+
+
+def _sanitize_filename(name: str, max_len: int = 80) -> str:
+    """Produce a filesystem-safe filename from a track title."""
+    # Replace slashes & other invalid chars with underscore
+    safe = re.sub(r'[<>:"/\\|?*\x00-\x1f]', '_', name)
+    # Collapse multiple underscores/spaces
+    safe = re.sub(r'[\s_]+', '_', safe).strip('_. ')
+    # Truncate
+    if len(safe) > max_len:
+        safe = safe[:max_len].rstrip('_. ')
+    return safe or "track"
+
+
+def _rename_audio_to_title(
+    orig_path: str,
+    title: str,
+    short_id: str,
+    suffix_index: int | None = None,
+) -> str:
+    """Rename an audio file to use the track title. Returns the new path."""
+    p = Path(orig_path)
+    ext = p.suffix  # e.g. ".flac"
+    parent = p.parent
+
+    base = _sanitize_filename(title)
+    # Append batch index if multiple outputs
+    if suffix_index is not None:
+        base = f"{base}_{suffix_index + 1}"
+
+    new_path = parent / f"{base}{ext}"
+
+    # Handle collision: append short ID
+    if new_path.exists() and new_path != p:
+        new_path = parent / f"{base}_{short_id}{ext}"
+
+    try:
+        p.rename(new_path)
+        # Also rename .peaks.json sidecar if it exists
+        old_peaks = p.with_suffix(".peaks.json")
+        if old_peaks.exists():
+            old_peaks.rename(new_path.with_suffix(".peaks.json"))
+        return str(new_path)
+    except OSError as e:
+        print(f"Warning: could not rename {p.name} → {new_path.name}: {e}")
+        return orig_path

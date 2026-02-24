@@ -75,8 +75,8 @@ export default function AudioVisualizer({
 
         // Gradient per bar
         const grad = ctx.createLinearGradient(x, height, x, y)
-        grad.addColorStop(0, 'rgba(124, 58, 237, 0.9)')   // --accent
-        grad.addColorStop(1, 'rgba(167, 139, 250, 0.7)')   // lighter accent
+        grad.addColorStop(0, 'rgba(245, 158, 11, 0.9)')   // --accent (amber)
+        grad.addColorStop(1, 'rgba(252, 211, 77, 0.7)')    // lighter accent (gold)
 
         ctx.fillStyle = grad
         ctx.beginPath()

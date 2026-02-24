@@ -4,6 +4,58 @@ All notable changes to ACE-Step MusicGen Player.
 
 ---
 
+## [0.4.0] — 2025-02-24
+
+### Added — Amber/Gold Color Scheme
+- **Complete color overhaul** — Replaced all violet/purple accent (#7c3aed) with amber/gold (#f59e0b) throughout the entire UI to differentiate from Tadpole Studio
+- Updated CSS design tokens, audio visualizer canvas gradients, and all component-level color references
+- Warning color shifted to orange (#fb923c) to avoid conflict with new accent
+
+### Added — Queue + Favorites + Rating System
+- **Queue panel** — Slide-out panel (via ListMusic button in PlayerBar) showing the current queue with track list, "Now Playing" highlight, click-to-jump, per-track remove, and Clear Queue
+- **Favorites** — Heart icon toggle on every track card (Library + Generation Results). Filter favorites in Library with dedicated toggle button. Persists to SQLite via PATCH API
+- **Star rating** — 5-star rating component on every track card. Click to rate (click same star to clear). Sort by rating in Library. Persists via PATCH API
+- **Optimistic UI updates** — Favorites and rating toggle instantly in the UI, with automatic rollback on API failure
+
+### Added — AutoGen (Automatic Batch Generation)
+- **AutoGen toggle** — Enable continuous generation: after each track completes, a new generation auto-starts with a randomized seed
+- **Max runs** — Set a limit (0 = unlimited) for how many auto-generations to run
+- **Run counter** — Real-time display showing "Run X / Y" or "Run X / ∞"
+- **Stop button** — Instantly halt the auto-generation loop
+- Located in the Generate page between the Generate button and results
+
+### Added — Full Player Overlay
+- **Full-screen player** — Slide-up overlay (via ChevronUp button in PlayerBar) with large audio visualizer, track title, caption, metadata badges, lyrics display, full transport controls, seek bar, and volume control
+- **framer-motion animations** — Spring-based slide transitions for both the full player and queue panel
+
+### Added — Title-Based Audio Filenames
+- **Smart file naming** — Generated audio files are now renamed from UUIDs to use the track title as filename (e.g. `Epic_Synthwave_Track.flac` instead of `abc123.flac`)
+- **Title rename propagation** — When editing a track title (in results or library), the audio file on disk is also renamed to match
+- **Filename sanitization** — Invalid filesystem characters are stripped, spaces collapsed, and length limited to 80 chars
+- **Collision handling** — If a file with the same name exists, a short ID suffix is appended
+- **Peaks sidecar** — `.peaks.json` sidecar files are renamed alongside the audio file
+
+### Changed — Backend
+- Database migration: added `favorite` (INTEGER DEFAULT 0) and `rating` (INTEGER DEFAULT 0) columns to tracks table (idempotent with try/except)
+- `GET /api/library` now accepts `favorite` query parameter for filtering
+- `PATCH /api/library/{id}` now accepts `favorite` and `rating` fields
+- `rating` added as valid sort column in library listing
+- `update_track()` now renames the audio file when title changes
+- `_row_to_track()` includes favorite/rating with safe key checking for backward compatibility
+
+### Changed — Frontend
+- New reusable `StarRating` component (`src/components/ui/StarRating.tsx`)
+- New `QueuePanel` component (`src/components/player/QueuePanel.tsx`)
+- New `FullPlayer` component (`src/components/player/FullPlayer.tsx`)
+- `usePlayerStore` — Added: `fullPlayerOpen`, `openFullPlayer`, `closeFullPlayer`, `toggleFullPlayer`, `removeFromQueue`, `clearQueue`, `setQueue`, `moveInQueue`
+- `useLibraryStore` — Added: `filterFavorites`, `setFilterFavorites`, `toggleFavorite`, `setRating` with optimistic updates
+- `useGenerationStore` — Added: `autoGen`, `autoGenMaxRuns`, `autoGenRunCount`, `setAutoGen`, `setAutoGenMaxRuns`, `resetAutoGenCount`, auto-retrigger on SSE complete
+- PlayerBar now includes queue button (with badge count) and expand-to-full-player button
+- AppShell mounts FullPlayer at root level
+- Library page has favorites filter toggle and rating sort option
+
+---
+
 ## [0.3.0] — 2025-02-24
 
 ### Added — Premium Player & Audio Engine

@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import {
   Play,
   Pause,
@@ -9,10 +9,13 @@ import {
   Shuffle,
   Repeat,
   Repeat1,
+  ListMusic,
+  ChevronUp,
 } from 'lucide-react'
 import clsx from 'clsx'
 import { usePlayerStore } from '../../stores/usePlayerStore'
 import AudioVisualizer from '../player/AudioVisualizer'
+import QueuePanel from '../player/QueuePanel'
 import Slider from '../ui/Slider'
 import { formatDuration } from '../../lib/utils'
 
@@ -32,7 +35,10 @@ export default function PlayerBar() {
   const setVolume = usePlayerStore((s) => s.setVolume)
   const toggleRepeat = usePlayerStore((s) => s.toggleRepeat)
   const toggleShuffle = usePlayerStore((s) => s.toggleShuffle)
+  const openFullPlayer = usePlayerStore((s) => s.openFullPlayer)
+  const queue = usePlayerStore((s) => s.queue)
 
+  const [queueOpen, setQueueOpen] = useState(false)
   const seekBarRef = useRef<HTMLDivElement>(null)
 
   const progress = duration > 0 ? currentTime / duration : 0
@@ -202,7 +208,7 @@ export default function PlayerBar() {
           </span>
         </div>
 
-        {/* ── RIGHT: Visualizer + Volume ─────────────────────────────── */}
+        {/* ── RIGHT: Visualizer + Volume + Queue + Expand ────────────── */}
         <div className="flex items-center gap-3 flex-1 justify-end min-w-0 max-w-[30%]">
           {/* Visualizer */}
           <AudioVisualizer
@@ -235,8 +241,42 @@ export default function PlayerBar() {
               />
             </div>
           </div>
+
+          {/* Queue button */}
+          <button
+            onClick={() => setQueueOpen(true)}
+            className={clsx(
+              'relative p-1.5 rounded-full transition-colors',
+              'text-[var(--text-muted)] hover:text-[var(--text-secondary)]',
+            )}
+            aria-label="Queue"
+          >
+            <ListMusic className="h-4 w-4" />
+            {queue.length > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 flex items-center justify-center w-3.5 h-3.5 text-[8px] font-bold bg-[var(--accent)] text-white rounded-full">
+                {queue.length}
+              </span>
+            )}
+          </button>
+
+          {/* Expand to full player */}
+          <button
+            onClick={openFullPlayer}
+            disabled={!currentTrack}
+            className={clsx(
+              'p-1.5 rounded-full transition-colors',
+              'text-[var(--text-muted)] hover:text-[var(--text-secondary)]',
+              'disabled:opacity-30 disabled:pointer-events-none',
+            )}
+            aria-label="Expand player"
+          >
+            <ChevronUp className="h-4 w-4" />
+          </button>
         </div>
       </div>
+
+      {/* Queue panel overlay */}
+      <QueuePanel open={queueOpen} onClose={() => setQueueOpen(false)} />
     </div>
   )
 }

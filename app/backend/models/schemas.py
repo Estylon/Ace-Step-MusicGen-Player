@@ -85,6 +85,8 @@ class TrackInfo(BaseModel):
     adapter_scale: Optional[float] = None
     task_type: str = "text2music"
     params_json: str = "{}"
+    favorite: bool = False
+    rating: int = 0  # 0-5 stars
     created_at: str = ""
     peaks: Optional[list[float]] = None
 
@@ -224,6 +226,8 @@ class TrackDetailResponse(BaseModel):
 class TrackUpdateRequest(BaseModel):
     title: Optional[str] = None
     tags: Optional[str] = None
+    favorite: Optional[bool] = None
+    rating: Optional[int] = Field(None, ge=0, le=5)
 
 
 # ── Upload ───────────────────────────────────────────────────────────────────

@@ -9,6 +9,9 @@ interface GenerationState {
   form: GenerateRequest
   activeJobs: Map<string, GenerationJob>
   results: TrackInfo[]
+  autoGen: boolean
+  autoGenMaxRuns: number
+  autoGenRunCount: number
 
   updateForm: (partial: Partial<GenerateRequest>) => void
   importPreset: (jsonInput: string | Record<string, unknown>) => ImportResult
@@ -17,6 +20,9 @@ interface GenerationState {
   generate: () => Promise<void>
   clearResults: () => void
   updateTrackTitle: (trackId: string, newTitle: string) => void
+  setAutoGen: (on: boolean) => void
+  setAutoGenMaxRuns: (n: number) => void
+  resetAutoGenCount: () => void
 }
 
 const defaultForm: GenerateRequest = {
@@ -62,6 +68,9 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
   form: { ...defaultForm },
   activeJobs: new Map(),
   results: [],
+  autoGen: false,
+  autoGenMaxRuns: 0,
+  autoGenRunCount: 0,
 
   updateForm: (partial) => {
     set((state) => ({
@@ -115,47 +124,61 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
 
       // Subscribe to SSE progress
       subscribeToProgress(job_id, (event) => {
-        set((state) => {
-          const jobs = new Map(state.activeJobs)
-          const current = jobs.get(job_id)
-          if (!current) return state
+        const state = get()
+        const jobs = new Map(state.activeJobs)
+        const current = jobs.get(job_id)
+        if (!current) return
 
-          switch (event.type) {
-            case 'progress': {
-              jobs.set(job_id, {
-                ...current,
-                status: 'running',
-                progress: event.percent ?? current.progress,
-                message: event.message ?? current.message,
-              })
-              return { activeJobs: jobs }
-            }
-            case 'complete': {
-              const tracks: TrackInfo[] = event.tracks ?? []
-              jobs.set(job_id, {
-                ...current,
-                status: 'complete',
-                progress: 100,
-                message: 'Complete',
-                tracks,
-              })
-              return {
-                activeJobs: jobs,
-                results: [...state.results, ...tracks],
-              }
-            }
-            case 'error': {
-              jobs.set(job_id, {
-                ...current,
-                status: 'error',
-                message: event.message ?? 'Generation failed',
-              })
-              return { activeJobs: jobs }
-            }
-            default:
-              return state
+        switch (event.type) {
+          case 'progress': {
+            jobs.set(job_id, {
+              ...current,
+              status: 'running',
+              progress: event.percent ?? current.progress,
+              message: event.message ?? current.message,
+            })
+            set({ activeJobs: jobs })
+            break
           }
-        })
+          case 'complete': {
+            const tracks: TrackInfo[] = event.tracks ?? []
+            jobs.set(job_id, {
+              ...current,
+              status: 'complete',
+              progress: 100,
+              message: 'Complete',
+              tracks,
+            })
+            set({
+              activeJobs: jobs,
+              results: [...state.results, ...tracks],
+            })
+
+            // AutoGen: auto-retrigger if enabled
+            const { autoGen, autoGenMaxRuns, autoGenRunCount } = get()
+            if (autoGen && (autoGenMaxRuns === 0 || autoGenRunCount < autoGenMaxRuns)) {
+              set({ autoGenRunCount: autoGenRunCount + 1 })
+              // Randomize seed and retrigger after short delay
+              setTimeout(() => {
+                const latest = get()
+                if (latest.autoGen) {
+                  set((s) => ({ form: { ...s.form, seed: -1 } }))
+                  latest.generate()
+                }
+              }, 1500)
+            }
+            break
+          }
+          case 'error': {
+            jobs.set(job_id, {
+              ...current,
+              status: 'error',
+              message: event.message ?? 'Generation failed',
+            })
+            set({ activeJobs: jobs })
+            break
+          }
+        }
       })
     } catch (err) {
       console.error('Failed to start generation:', err)
@@ -173,5 +196,17 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
         t.id === trackId ? { ...t, title: newTitle } : t,
       ),
     }))
+  },
+
+  setAutoGen: (on) => {
+    set({ autoGen: on })
+  },
+
+  setAutoGenMaxRuns: (n) => {
+    set({ autoGenMaxRuns: n })
+  },
+
+  resetAutoGenCount: () => {
+    set({ autoGenRunCount: 0 })
   },
 }))

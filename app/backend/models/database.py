@@ -60,4 +60,16 @@ async def init_db():
     """Initialize database schema."""
     async with aiosqlite.connect(str(DB_PATH)) as db:
         await db.executescript(SCHEMA_SQL)
+
+        # ── Migrations (idempotent) ─────────────────────────────────────
+        # v0.4.0: Add favorite + rating columns
+        for col, definition in [
+            ("favorite", "INTEGER NOT NULL DEFAULT 0"),
+            ("rating", "INTEGER NOT NULL DEFAULT 0"),
+        ]:
+            try:
+                await db.execute(f"ALTER TABLE tracks ADD COLUMN {col} {definition}")
+            except Exception:
+                pass  # Column already exists
+
         await db.commit()

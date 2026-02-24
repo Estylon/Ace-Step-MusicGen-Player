@@ -20,6 +20,7 @@ interface PlayerState {
   queueIndex: number
   repeatMode: RepeatMode
   shuffle: boolean
+  fullPlayerOpen: boolean
 
   play: (track: TrackInfo) => void
   pause: () => void
@@ -31,6 +32,13 @@ interface PlayerState {
   addToQueue: (track: TrackInfo) => void
   toggleRepeat: () => void
   toggleShuffle: () => void
+  openFullPlayer: () => void
+  closeFullPlayer: () => void
+  toggleFullPlayer: () => void
+  removeFromQueue: (index: number) => void
+  clearQueue: () => void
+  setQueue: (tracks: TrackInfo[]) => void
+  moveInQueue: (from: number, to: number) => void
 }
 
 export const usePlayerStore = create<PlayerState>((set, get) => ({
@@ -43,6 +51,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   queueIndex: -1,
   repeatMode: 'none',
   shuffle: false,
+  fullPlayerOpen: false,
 
   play: (track) => {
     const { queue, volume } = get()
@@ -211,5 +220,91 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
   toggleShuffle: () => {
     set((state) => ({ shuffle: !state.shuffle }))
+  },
+
+  openFullPlayer: () => {
+    set({ fullPlayerOpen: true })
+  },
+
+  closeFullPlayer: () => {
+    set({ fullPlayerOpen: false })
+  },
+
+  toggleFullPlayer: () => {
+    set((state) => ({ fullPlayerOpen: !state.fullPlayerOpen }))
+  },
+
+  removeFromQueue: (index) => {
+    const { queue, queueIndex } = get()
+    if (index < 0 || index >= queue.length) return
+
+    const newQueue = queue.filter((_, i) => i !== index)
+    let newIndex = queueIndex
+
+    if (newQueue.length === 0) {
+      newIndex = -1
+    } else if (index < queueIndex) {
+      newIndex = queueIndex - 1
+    } else if (index === queueIndex) {
+      // Currently playing track was removed
+      newIndex = Math.min(queueIndex, newQueue.length - 1)
+    }
+
+    set({ queue: newQueue, queueIndex: newIndex })
+  },
+
+  clearQueue: () => {
+    set({ queue: [], queueIndex: -1 })
+  },
+
+  setQueue: (tracks) => {
+    if (tracks.length === 0) {
+      set({ queue: [], queueIndex: -1 })
+      return
+    }
+
+    const { volume } = get()
+    const firstTrack = tracks[0]
+    loadTrack(firstTrack.audio_url)
+    setAudioVolume(volume)
+    playAudio()
+
+    set({
+      queue: tracks,
+      queueIndex: 0,
+      currentTrack: firstTrack,
+      isPlaying: true,
+      currentTime: 0,
+      duration: firstTrack.duration,
+    })
+  },
+
+  moveInQueue: (from, to) => {
+    set((state) => {
+      const { queue, queueIndex } = state
+      if (
+        from < 0 || from >= queue.length ||
+        to < 0 || to >= queue.length ||
+        from === to
+      ) {
+        return state
+      }
+
+      const newQueue = [...queue]
+      const [moved] = newQueue.splice(from, 1)
+      newQueue.splice(to, 0, moved)
+
+      // Adjust queueIndex to follow the currently playing track
+      let newIndex = queueIndex
+      if (queueIndex === from) {
+        newIndex = to
+      } else if (from < queueIndex && to >= queueIndex) {
+        newIndex = queueIndex - 1
+      } else if (from > queueIndex && to <= queueIndex) {
+        newIndex = queueIndex + 1
+      }
+
+      return { queue: newQueue, queueIndex: newIndex }
+    })
   },
 }))

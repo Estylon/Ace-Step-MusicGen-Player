@@ -7,13 +7,16 @@ import {
   Music,
   Pencil,
   Check,
+  Heart,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import clsx from 'clsx'
 import Badge from '../ui/Badge'
 import Button from '../ui/Button'
+import StarRating from '../ui/StarRating'
 import { useGenerationStore } from '../../stores/useGenerationStore'
 import { usePlayerStore } from '../../stores/usePlayerStore'
+import { updateTrack as apiUpdateTrack } from '../../api/library'
 import { formatDuration } from '../../lib/utils'
 import type { TrackInfo } from '../../types'
 
@@ -173,6 +176,8 @@ function ResultCard({ track }: { track: TrackInfo }) {
   const currentTime = usePlayerStore((s) => s.currentTime)
   const duration = usePlayerStore((s) => s.duration)
   const navigate = useNavigate()
+  const [localFav, setLocalFav] = useState(track.favorite)
+  const [localRating, setLocalRating] = useState(track.rating)
 
   const isActive = currentTrack?.id === track.id
   const isThisPlaying = isActive && isPlaying
@@ -199,7 +204,7 @@ function ResultCard({ track }: { track: TrackInfo }) {
         'bg-[var(--bg-secondary)] border',
         'transition-all duration-200',
         isActive
-          ? 'border-[var(--accent)]/40 shadow-[0_0_20px_rgba(124,58,237,0.15)]'
+          ? 'border-[var(--accent)]/40 shadow-[0_0_20px_rgba(245,158,11,0.12)]'
           : 'border-[var(--border)] hover:border-[var(--border-hover)] hover:shadow-[var(--shadow)]',
       )}
     >
@@ -263,6 +268,33 @@ function ResultCard({ track }: { track: TrackInfo }) {
               {isThisPlaying ? 'Playing' : 'Paused'}
             </Badge>
           )}
+        </div>
+
+        {/* Favorite + Rating */}
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => {
+              const next = !localFav
+              setLocalFav(next)
+              apiUpdateTrack(track.id, { favorite: next }).catch(() => setLocalFav(!next))
+            }}
+            className={clsx(
+              'p-0.5 rounded transition-colors',
+              localFav
+                ? 'text-[var(--accent)]'
+                : 'text-[var(--text-muted)] hover:text-[var(--accent)]',
+            )}
+          >
+            <Heart className="w-4 h-4" fill={localFav ? 'currentColor' : 'none'} />
+          </button>
+          <StarRating
+            value={localRating}
+            onChange={(r) => {
+              setLocalRating(r)
+              apiUpdateTrack(track.id, { rating: r }).catch(() => setLocalRating(track.rating))
+            }}
+            size="sm"
+          />
         </div>
       </div>
 

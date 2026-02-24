@@ -32,10 +32,19 @@ It's opinionated — designed to pair with [my ACE-Step LoRA Trainer](https://gi
 ### Player & Audio
 
 - **Real audio engine** — HTMLAudioElement + Web Audio API with AnalyserNode for frequency analysis
-- **Spotify-style player bar** — seek bar, transport controls (shuffle, prev, play, next, repeat), volume with mute, time display
-- **Real-time audio visualizer** — canvas-based frequency bars with purple gradient, driven by the AnalyserNode
-- **Premium result cards** — animated waveform with playback progress overlay, editable track titles, play state badges
-- **Track naming** — name your tracks before generation or edit titles inline after
+- **Spotify-style player bar** — seek bar, transport controls (shuffle, prev, play, next, repeat), volume with mute, time display, queue button, full player expand
+- **Real-time audio visualizer** — canvas-based frequency bars with amber/gold gradient, driven by the AnalyserNode
+- **Full player overlay** — slide-up full-screen view with large visualizer, metadata badges, lyrics display, full transport + seek + volume controls
+- **Queue panel** — slide-out panel showing current queue, now-playing indicator, click-to-jump, remove/clear
+- **Premium result cards** — animated waveform with playback progress overlay, editable track titles, play state badges, favorites heart, star rating
+- **Track naming** — name your tracks before generation or edit titles inline after. Audio files on disk are automatically renamed to match the track title
+
+### Favorites, Rating & AutoGen
+
+- **Favorites** — heart toggle on every track card (library + generation results), filter library by favorites
+- **Star rating** — 5-star rating on every track, sort library by rating
+- **AutoGen** — automatic continuous generation with configurable max runs, auto-randomizes seed between runs
+- **Title-based filenames** — generated audio files use the track title as filename, not UUIDs
 
 ### Stem Separation
 
@@ -45,7 +54,7 @@ It's opinionated — designed to pair with [my ACE-Step LoRA Trainer](https://gi
 
 ### Library & Settings
 
-- **SQLite-backed generation library** with search, sort, and full metadata
+- **SQLite-backed generation library** with search, sort, favorites filter, rating sort, and full metadata
 - **Customizable paths** — all model, checkpoint, LoRA, and output directories configurable through the UI
 - **Native OS folder picker** for all path settings
 - **Persistent settings** across sessions
@@ -231,8 +240,8 @@ Interactive docs at **http://127.0.0.1:3456/docs** when running.
 | `/api/lora/unload` | POST | Unload adapter |
 | `/api/lora/config` | PATCH | Update adapter scale/active |
 | `/api/lora/scan` | POST | Re-scan adapter directories |
-| `/api/library` | GET | List generated tracks |
-| `/api/library/{id}` | GET/DELETE | Track detail / delete |
+| `/api/library` | GET | List tracks (supports `favorite` filter, `rating` sort) |
+| `/api/library/{id}` | GET/PATCH/DELETE | Track detail / update (title, favorite, rating) / delete |
 | `/api/gpu/status` | GET | GPU VRAM status |
 | `/api/settings` | GET/PUT | User settings |
 

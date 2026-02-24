@@ -1,8 +1,9 @@
 import { useState, useCallback } from 'react'
-import { Play, Scissors, Trash2, Zap, Cpu } from 'lucide-react'
+import { Play, Scissors, Trash2, Zap, Cpu, Heart } from 'lucide-react'
 import clsx from 'clsx'
 import Card from '../ui/Card'
 import Badge from '../ui/Badge'
+import StarRating from '../ui/StarRating'
 import { usePlayerStore } from '../../stores/usePlayerStore'
 import { useLibraryStore } from '../../stores/useLibraryStore'
 import { formatDuration, formatTimeAgo } from '../../lib/utils'
@@ -41,6 +42,8 @@ export default function TrackCard({ track }: TrackCardProps) {
   const play = usePlayerStore((s) => s.play)
   const selectTrack = useLibraryStore((s) => s.selectTrack)
   const deleteTrack = useLibraryStore((s) => s.deleteTrack)
+  const toggleFavorite = useLibraryStore((s) => s.toggleFavorite)
+  const setRating = useLibraryStore((s) => s.setRating)
 
   const handlePlay = useCallback(
     (e: React.MouseEvent) => {
@@ -89,10 +92,38 @@ export default function TrackCard({ track }: TrackCardProps) {
         {/* Waveform */}
         <MiniWaveform peaks={track.peaks} />
 
-        {/* Title */}
-        <h3 className="text-sm font-medium text-[var(--text-primary)] truncate">
-          {track.title}
-        </h3>
+        {/* Title + Favorite */}
+        <div className="flex items-center gap-2 min-w-0">
+          <h3 className="text-sm font-medium text-[var(--text-primary)] truncate flex-1 min-w-0">
+            {track.title}
+          </h3>
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              toggleFavorite(track.id)
+            }}
+            className={clsx(
+              'shrink-0 p-0.5 rounded transition-colors',
+              track.favorite
+                ? 'text-[var(--accent)]'
+                : 'text-[var(--text-muted)] hover:text-[var(--accent)]',
+            )}
+          >
+            <Heart
+              className="h-3.5 w-3.5"
+              fill={track.favorite ? 'currentColor' : 'none'}
+            />
+          </button>
+        </div>
+
+        {/* Star Rating */}
+        <div onClick={(e) => e.stopPropagation()}>
+          <StarRating
+            value={track.rating}
+            onChange={(r) => setRating(track.id, r)}
+            size="sm"
+          />
+        </div>
 
         {/* Badges row */}
         <div className="flex items-center gap-1.5 flex-wrap">

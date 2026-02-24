@@ -17,10 +17,12 @@ async def list_tracks(
     search: str = "",
     sort: str = "created_at",
     order: str = "desc",
+    favorite: bool | None = None,
 ):
-    """List tracks with pagination and search."""
+    """List tracks with pagination, search, and optional favorite filter."""
     return await library_service.list_tracks(
-        page=page, page_size=page_size, search=search, sort=sort, order=order
+        page=page, page_size=page_size, search=search, sort=sort, order=order,
+        favorite=favorite,
     )
 
 
@@ -35,9 +37,10 @@ async def get_track(track_id: str):
 
 @router.patch("/{track_id}")
 async def update_track(track_id: str, request: TrackUpdateRequest):
-    """Update track metadata (title, tags)."""
+    """Update track metadata (title, tags, favorite, rating)."""
     ok = await library_service.update_track(
-        track_id, title=request.title, tags=request.tags
+        track_id, title=request.title, tags=request.tags,
+        favorite=request.favorite, rating=request.rating,
     )
     if not ok:
         raise HTTPException(404, "Track not found")

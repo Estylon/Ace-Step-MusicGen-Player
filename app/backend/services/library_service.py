@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 from typing import Optional
 
@@ -56,17 +57,23 @@ async def list_tracks(
     search: str = "",
     sort: str = "created_at",
     order: str = "desc",
+    favorite: bool | None = None,
 ) -> LibraryListResponse:
-    """List tracks with pagination, search, and sort."""
+    """List tracks with pagination, search, sort, and optional favorite filter."""
     db = await get_db()
     try:
-        # Count total
-        where = ""
+        # Build WHERE clauses
+        conditions: list[str] = []
         params: list = []
         if search:
-            where = "WHERE title LIKE ? OR caption LIKE ? OR tags LIKE ?"
+            conditions.append("(title LIKE ? OR caption LIKE ? OR tags LIKE ?)")
             q = f"%{search}%"
-            params = [q, q, q]
+            params.extend([q, q, q])
+        if favorite is not None:
+            conditions.append("favorite = ?")
+            params.append(1 if favorite else 0)
+
+        where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
 
         row = await db.execute_fetchall(
             f"SELECT COUNT(*) as cnt FROM tracks {where}", params
@@ -74,7 +81,7 @@ async def list_tracks(
         total = row[0][0] if row else 0
 
         # Validate sort column
-        valid_sorts = {"created_at", "title", "duration", "bpm"}
+        valid_sorts = {"created_at", "title", "duration", "bpm", "rating"}
         if sort not in valid_sorts:
             sort = "created_at"
         order_dir = "DESC" if order.lower() == "desc" else "ASC"
@@ -116,18 +123,42 @@ async def get_track(track_id: str) -> Optional[TrackDetailResponse]:
         await db.close()
 
 
-async def update_track(track_id: str, title: Optional[str] = None, tags: Optional[str] = None) -> bool:
-    """Update track metadata."""
+async def update_track(
+    track_id: str,
+    title: Optional[str] = None,
+    tags: Optional[str] = None,
+    favorite: Optional[bool] = None,
+    rating: Optional[int] = None,
+) -> bool:
+    """Update track metadata. If the title changes, the audio file is also renamed."""
     db = await get_db()
     try:
         updates = []
         params = []
+
+        # If title is changing, also rename the audio file on disk
         if title is not None:
+            rows = await db.execute_fetchall(
+                "SELECT audio_path FROM tracks WHERE id = ?", (track_id,)
+            )
+            if rows and rows[0][0]:
+                new_path = _rename_audio_file(rows[0][0], title, track_id[:8])
+                if new_path != rows[0][0]:
+                    updates.append("audio_path = ?")
+                    params.append(new_path)
+
             updates.append("title = ?")
             params.append(title)
+
         if tags is not None:
             updates.append("tags = ?")
             params.append(tags)
+        if favorite is not None:
+            updates.append("favorite = ?")
+            params.append(1 if favorite else 0)
+        if rating is not None:
+            updates.append("rating = ?")
+            params.append(max(0, min(5, rating)))
         if not updates:
             return False
         params.append(track_id)
@@ -138,6 +169,41 @@ async def update_track(track_id: str, title: Optional[str] = None, tags: Optiona
         return True
     finally:
         await db.close()
+
+
+def _sanitize_filename(name: str, max_len: int = 80) -> str:
+    """Produce a filesystem-safe filename from a track title."""
+    safe = re.sub(r'[<>:"/\\|?*\x00-\x1f]', '_', name)
+    safe = re.sub(r'[\s_]+', '_', safe).strip('_. ')
+    if len(safe) > max_len:
+        safe = safe[:max_len].rstrip('_. ')
+    return safe or "track"
+
+
+def _rename_audio_file(old_path: str, new_title: str, short_id: str) -> str:
+    """Rename an audio file to match a new title. Returns the new path."""
+    p = Path(old_path)
+    if not p.is_file():
+        return old_path
+
+    ext = p.suffix
+    parent = p.parent
+    base = _sanitize_filename(new_title)
+    new_path = parent / f"{base}{ext}"
+
+    # Collision: append short track id
+    if new_path.exists() and new_path != p:
+        new_path = parent / f"{base}_{short_id}{ext}"
+
+    try:
+        p.rename(new_path)
+        # Rename peaks sidecar too
+        old_peaks = p.with_suffix(".peaks.json")
+        if old_peaks.exists():
+            old_peaks.rename(new_path.with_suffix(".peaks.json"))
+        return str(new_path)
+    except OSError:
+        return old_path
 
 
 async def delete_track(track_id: str) -> bool:
@@ -202,6 +268,8 @@ def _row_to_track(row) -> TrackInfo:
         adapter_scale=row["adapter_scale"],
         task_type=row["task_type"],
         params_json=row["params_json"],
+        favorite=bool(row["favorite"]) if "favorite" in row.keys() else False,
+        rating=row["rating"] if "rating" in row.keys() else 0,
         created_at=row["created_at"],
     )
 

@@ -3,6 +3,7 @@ import type { TrackInfo } from '../types'
 import {
   listTracks as apiListTracks,
   deleteTrack as apiDeleteTrack,
+  updateTrack as apiUpdateTrack,
 } from '../api/library'
 
 interface LibraryState {
@@ -14,6 +15,7 @@ interface LibraryState {
   sort: string
   loading: boolean
   selectedTrack: TrackInfo | null
+  filterFavorites: boolean
 
   fetchTracks: () => Promise<void>
   setSearch: (q: string) => void
@@ -21,6 +23,9 @@ interface LibraryState {
   setPage: (p: number) => void
   selectTrack: (id: string | null) => void
   deleteTrack: (id: string) => Promise<void>
+  setFilterFavorites: (v: boolean) => void
+  toggleFavorite: (trackId: string) => Promise<void>
+  setRating: (trackId: string, rating: number) => Promise<void>
 }
 
 export const useLibraryStore = create<LibraryState>((set, get) => ({
@@ -32,12 +37,19 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
   sort: 'created_at',
   loading: false,
   selectedTrack: null,
+  filterFavorites: false,
 
   fetchTracks: async () => {
-    const { page, search, sort } = get()
+    const { page, search, sort, filterFavorites } = get()
     set({ loading: true })
     try {
-      const result = await apiListTracks(page, search, sort, 'desc')
+      const result = await apiListTracks(
+        page,
+        search,
+        sort,
+        'desc',
+        filterFavorites ? true : undefined,
+      )
       set({
         tracks: result.tracks,
         total: result.total,
@@ -89,6 +101,66 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
     } catch (err) {
       console.error('Failed to delete track:', err)
       throw err
+    }
+  },
+
+  setFilterFavorites: (v) => {
+    set({ filterFavorites: v, page: 1 })
+    get().fetchTracks()
+  },
+
+  toggleFavorite: async (trackId) => {
+    const { tracks } = get()
+    const track = tracks.find((t) => t.id === trackId)
+    if (!track) return
+
+    const newFavorite = !track.favorite
+
+    // Optimistic update
+    set({
+      tracks: tracks.map((t) =>
+        t.id === trackId ? { ...t, favorite: newFavorite } : t,
+      ),
+    })
+
+    try {
+      await apiUpdateTrack(trackId, { favorite: newFavorite })
+      await get().fetchTracks()
+    } catch (err) {
+      console.error('Failed to toggle favorite:', err)
+      // Revert on failure
+      set({
+        tracks: get().tracks.map((t) =>
+          t.id === trackId ? { ...t, favorite: !newFavorite } : t,
+        ),
+      })
+    }
+  },
+
+  setRating: async (trackId, rating) => {
+    const { tracks } = get()
+    const track = tracks.find((t) => t.id === trackId)
+    if (!track) return
+
+    const oldRating = track.rating
+
+    // Optimistic update
+    set({
+      tracks: tracks.map((t) =>
+        t.id === trackId ? { ...t, rating } : t,
+      ),
+    })
+
+    try {
+      await apiUpdateTrack(trackId, { rating })
+    } catch (err) {
+      console.error('Failed to set rating:', err)
+      // Revert on failure
+      set({
+        tracks: get().tracks.map((t) =>
+          t.id === trackId ? { ...t, rating: oldRating } : t,
+        ),
+      })
     }
   },
 }))

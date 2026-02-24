@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { Library, Search, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Library, Search, ChevronLeft, ChevronRight, Heart } from 'lucide-react'
 import clsx from 'clsx'
 import Select from '../ui/Select'
 import TrackCard from './TrackCard'
@@ -12,6 +12,7 @@ const SORT_OPTIONS = [
   { value: 'title', label: 'Title A-Z' },
   { value: 'duration', label: 'Duration' },
   { value: 'bpm', label: 'BPM' },
+  { value: 'rating', label: 'Rating' },
 ]
 
 export default function LibraryPage() {
@@ -23,10 +24,12 @@ export default function LibraryPage() {
   const sort = useLibraryStore((s) => s.sort)
   const loading = useLibraryStore((s) => s.loading)
   const selectedTrack = useLibraryStore((s) => s.selectedTrack)
+  const filterFavorites = useLibraryStore((s) => s.filterFavorites)
   const fetchTracks = useLibraryStore((s) => s.fetchTracks)
   const setSearch = useLibraryStore((s) => s.setSearch)
   const setSort = useLibraryStore((s) => s.setSort)
   const setPage = useLibraryStore((s) => s.setPage)
+  const setFilterFavorites = useLibraryStore((s) => s.setFilterFavorites)
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
 
@@ -53,6 +56,24 @@ export default function LibraryPage() {
         </div>
 
         <div className="flex items-center gap-3 sm:ml-auto">
+          {/* Favorites filter toggle */}
+          <button
+            onClick={() => setFilterFavorites(!filterFavorites)}
+            className={clsx(
+              'flex items-center gap-1.5 px-3 h-9 rounded-[var(--radius)] text-xs font-medium',
+              'border transition-colors duration-[var(--transition)]',
+              filterFavorites
+                ? 'bg-[var(--accent-muted)] border-[var(--accent)] text-[var(--accent)]'
+                : 'bg-[var(--bg-secondary)] border-[var(--border)] text-[var(--text-secondary)] hover:border-[var(--border-hover)] hover:text-[var(--text-primary)]',
+            )}
+          >
+            <Heart
+              className="h-3.5 w-3.5"
+              fill={filterFavorites ? 'currentColor' : 'none'}
+            />
+            Favorites
+          </button>
+
           <div className="relative flex-1 sm:w-64">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[var(--text-muted)] pointer-events-none" />
             <input
