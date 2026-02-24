@@ -30,7 +30,7 @@ fi
 echo "[5/7] Patching vector_quantize_pytorch for transformers 5.x..."
 python "$SCRIPT_DIR/patch_vqvae.py"
 
-echo "[6/7] Installing audio-separator..."
+echo "[6/8] Installing audio-separator..."
 # Try normal install first; if diffq-fixed fails to build, use fallback
 if ! uv pip install "audio-separator[gpu]>=0.30.0" 2>/dev/null; then
     echo "  Normal install failed, trying Cython workaround..."
@@ -39,12 +39,17 @@ if ! uv pip install "audio-separator[gpu]>=0.30.0" 2>/dev/null; then
         echo "  Installing audio-separator without diffq (non-quantized models only)..."
         pip install audio-separator --no-deps --quiet
         uv pip install requests six tqdm pydub julius einops pyyaml ml_collections resampy beartype "rotary-embedding-torch>=0.5.3" scipy onnxruntime
+        echo "  Installing diffq stub for Demucs compatibility..."
+        python "$SCRIPT_DIR/install_diffq_stub.py"
     else
         uv pip install "audio-separator[gpu]>=0.30.0"
     fi
 fi
 
-echo "[7/7] Installing frontend dependencies..."
+echo "[7/8] Upgrading beartype for Python 3.13+ compatibility..."
+python -c "import beartype" 2>/dev/null && uv pip install "beartype>=0.20.0" --quiet 2>/dev/null || true
+
+echo "[8/8] Installing frontend dependencies..."
 cd "$PROJECT_DIR/app/frontend"
 npm install
 
