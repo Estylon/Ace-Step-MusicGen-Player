@@ -1,11 +1,13 @@
 import { useState, useCallback } from 'react'
-import { Play, Scissors, Trash2, Zap, Cpu, Heart } from 'lucide-react'
+import { Play, Scissors, Trash2, Zap, Cpu, Heart, RotateCcw, CheckSquare, Square } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import clsx from 'clsx'
 import Card from '../ui/Card'
 import Badge from '../ui/Badge'
 import StarRating from '../ui/StarRating'
 import { usePlayerStore } from '../../stores/usePlayerStore'
 import { useLibraryStore } from '../../stores/useLibraryStore'
+import { useGenerationStore } from '../../stores/useGenerationStore'
 import { formatDuration, formatTimeAgo } from '../../lib/utils'
 import type { TrackInfo } from '../../types'
 
@@ -38,12 +40,19 @@ interface TrackCardProps {
 
 export default function TrackCard({ track }: TrackCardProps) {
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const navigate = useNavigate()
 
   const play = usePlayerStore((s) => s.play)
   const selectTrack = useLibraryStore((s) => s.selectTrack)
   const deleteTrack = useLibraryStore((s) => s.deleteTrack)
   const toggleFavorite = useLibraryStore((s) => s.toggleFavorite)
   const setRating = useLibraryStore((s) => s.setRating)
+  const multiSelectMode = useLibraryStore((s) => s.multiSelectMode)
+  const selectedIds = useLibraryStore((s) => s.selectedIds)
+  const toggleSelected = useLibraryStore((s) => s.toggleSelected)
+  const recallParams = useGenerationStore((s) => s.recallParams)
+
+  const isSelected = selectedIds.has(track.id)
 
   const handlePlay = useCallback(
     (e: React.MouseEvent) => {
@@ -82,13 +91,45 @@ export default function TrackCard({ track }: TrackCardProps) {
     [confirmDelete, deleteTrack, track.id],
   )
 
+  const handleRecall = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation()
+      if (track.params_json && track.params_json !== '{}') {
+        recallParams(track.params_json)
+        navigate('/')
+      }
+    },
+    [recallParams, track.params_json, navigate],
+  )
+
   const handleCardClick = useCallback(() => {
-    selectTrack(track.id)
-  }, [selectTrack, track.id])
+    if (multiSelectMode) {
+      toggleSelected(track.id)
+    } else {
+      selectTrack(track.id)
+    }
+  }, [multiSelectMode, toggleSelected, selectTrack, track.id])
 
   return (
-    <Card hover className="cursor-pointer" >
+    <Card
+      hover
+      className={clsx(
+        'cursor-pointer relative',
+        multiSelectMode && isSelected && 'ring-2 ring-[var(--accent)] border-[var(--accent)]',
+      )}
+    >
       <div onClick={handleCardClick} className="flex flex-col gap-3">
+        {/* Multi-select checkbox */}
+        {multiSelectMode && (
+          <div className="absolute top-3 right-3 z-10">
+            {isSelected ? (
+              <CheckSquare className="h-5 w-5 text-[var(--accent)]" />
+            ) : (
+              <Square className="h-5 w-5 text-[var(--text-muted)]" />
+            )}
+          </div>
+        )}
+
         {/* Waveform */}
         <MiniWaveform peaks={track.peaks} />
 
@@ -189,6 +230,22 @@ export default function TrackCard({ track }: TrackCardProps) {
             <Scissors className="h-3 w-3" />
             Stems
           </button>
+
+          {track.params_json && track.params_json !== '{}' && (
+            <button
+              onClick={handleRecall}
+              className={clsx(
+                'flex items-center gap-1.5 px-2.5 py-1.5 rounded-[var(--radius-sm)] text-xs font-medium',
+                'text-[var(--text-secondary)]',
+                'hover:text-[var(--accent)] hover:bg-[var(--accent-muted)]',
+                'transition-colors duration-[var(--transition)]',
+              )}
+              title="Recall generation parameters"
+            >
+              <RotateCcw className="h-3 w-3" />
+              Recall
+            </button>
+          )}
 
           <div className="flex-1" />
 

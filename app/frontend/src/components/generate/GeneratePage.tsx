@@ -16,6 +16,7 @@ import GenerateButton from './GenerateButton'
 import GenerationResults from './GenerationResults'
 import ImportPresetModal from './ImportPresetModal'
 import ExportPresetModal from './ExportPresetModal'
+import PresetSelector from './PresetSelector'
 import Tooltip from '../ui/Tooltip'
 
 function AutoGenControls() {
@@ -136,6 +137,7 @@ export default function GeneratePage() {
         {/* Preset toolbar — only when model is ready */}
         {isInitialized && (
           <div className="flex items-center gap-1.5">
+            <PresetSelector />
             <Tooltip content="Import JSON preset">
               <button
                 onClick={() => setShowImport(true)}

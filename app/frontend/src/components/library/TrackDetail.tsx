@@ -9,11 +9,14 @@ import {
   Hash,
   Clock,
   Music,
+  RotateCcw,
 } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import clsx from 'clsx'
 import Button from '../ui/Button'
 import { useLibraryStore } from '../../stores/useLibraryStore'
 import { usePlayerStore } from '../../stores/usePlayerStore'
+import { useGenerationStore } from '../../stores/useGenerationStore'
 import { formatDuration, formatTimeAgo } from '../../lib/utils'
 
 // ── Metadata row ─────────────────────────────────────────────────────────────
@@ -62,10 +65,13 @@ function FullWaveform({ peaks }: { peaks: number[] | null }) {
 export default function TrackDetail() {
   const [confirmDelete, setConfirmDelete] = useState(false)
 
+  const navigate = useNavigate()
+
   const selectedTrack = useLibraryStore((s) => s.selectedTrack)
   const selectTrack = useLibraryStore((s) => s.selectTrack)
   const deleteTrack = useLibraryStore((s) => s.deleteTrack)
   const play = usePlayerStore((s) => s.play)
+  const recallParams = useGenerationStore((s) => s.recallParams)
 
   const handleClose = useCallback(() => {
     selectTrack(null)
@@ -91,6 +97,14 @@ export default function TrackDetail() {
     }
     setConfirmDelete(false)
   }, [confirmDelete, deleteTrack, selectedTrack])
+
+  const handleRecall = useCallback(() => {
+    if (selectedTrack?.params_json && selectedTrack.params_json !== '{}') {
+      recallParams(selectedTrack.params_json)
+      selectTrack(null)
+      navigate('/')
+    }
+  }, [recallParams, selectedTrack, selectTrack, navigate])
 
   if (!selectedTrack) return null
 
@@ -224,6 +238,12 @@ export default function TrackDetail() {
             <Scissors className="h-3.5 w-3.5" />
             Separate Stems
           </Button>
+          {track.params_json && track.params_json !== '{}' && (
+            <Button size="sm" variant="secondary" onClick={handleRecall}>
+              <RotateCcw className="h-3.5 w-3.5" />
+              Recall
+            </Button>
+          )}
           <div className="flex-1" />
           <Button
             size="sm"

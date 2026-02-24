@@ -17,6 +17,10 @@ interface LibraryState {
   selectedTrack: TrackInfo | null
   filterFavorites: boolean
 
+  // Multi-select for batch operations
+  multiSelectMode: boolean
+  selectedIds: Set<string>
+
   fetchTracks: () => Promise<void>
   setSearch: (q: string) => void
   setSort: (s: string) => void
@@ -26,6 +30,12 @@ interface LibraryState {
   setFilterFavorites: (v: boolean) => void
   toggleFavorite: (trackId: string) => Promise<void>
   setRating: (trackId: string, rating: number) => Promise<void>
+
+  // Multi-select actions
+  setMultiSelectMode: (on: boolean) => void
+  toggleSelected: (id: string) => void
+  selectAll: () => void
+  clearSelection: () => void
 }
 
 export const useLibraryStore = create<LibraryState>((set, get) => ({
@@ -38,6 +48,8 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
   loading: false,
   selectedTrack: null,
   filterFavorites: false,
+  multiSelectMode: false,
+  selectedIds: new Set(),
 
   fetchTracks: async () => {
     const { page, search, sort, filterFavorites } = get()
@@ -162,5 +174,32 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
         ),
       })
     }
+  },
+
+  // ── Multi-select ─────────────────────────────────────────────────────────
+
+  setMultiSelectMode: (on) => {
+    set({ multiSelectMode: on, selectedIds: new Set() })
+  },
+
+  toggleSelected: (id) => {
+    set((state) => {
+      const next = new Set(state.selectedIds)
+      if (next.has(id)) {
+        next.delete(id)
+      } else {
+        next.add(id)
+      }
+      return { selectedIds: next }
+    })
+  },
+
+  selectAll: () => {
+    const { tracks } = get()
+    set({ selectedIds: new Set(tracks.map((t) => t.id)) })
+  },
+
+  clearSelection: () => {
+    set({ selectedIds: new Set() })
   },
 }))

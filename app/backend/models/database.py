@@ -42,8 +42,17 @@ CREATE TABLE IF NOT EXISTS stems (
     FOREIGN KEY (track_id) REFERENCES tracks(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS presets (
+    id          TEXT PRIMARY KEY,
+    name        TEXT NOT NULL DEFAULT '',
+    params_json TEXT NOT NULL DEFAULT '{}',
+    created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE INDEX IF NOT EXISTS idx_tracks_created ON tracks(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_stems_track ON stems(track_id);
+CREATE INDEX IF NOT EXISTS idx_presets_name ON presets(name);
 """
 
 

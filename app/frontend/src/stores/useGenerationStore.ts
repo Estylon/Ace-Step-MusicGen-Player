@@ -20,6 +20,7 @@ interface GenerationState {
   generate: () => Promise<void>
   clearResults: () => void
   updateTrackTitle: (trackId: string, newTitle: string) => void
+  recallParams: (paramsJson: string) => ImportResult | null
   setAutoGen: (on: boolean) => void
   setAutoGenMaxRuns: (n: number) => void
   resetAutoGenCount: () => void
@@ -196,6 +197,21 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
         t.id === trackId ? { ...t, title: newTitle } : t,
       ),
     }))
+  },
+
+  recallParams: (paramsJson) => {
+    try {
+      const parsed = JSON.parse(paramsJson)
+      if (typeof parsed !== 'object' || parsed === null) return null
+      const result = parsePreset(parsed)
+      set(() => ({
+        form: { ...defaultForm, ...result.formUpdate },
+      }))
+      return result
+    } catch {
+      console.error('Failed to recall params from track')
+      return null
+    }
   },
 
   setAutoGen: (on) => {

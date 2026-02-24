@@ -286,3 +286,34 @@ class DownloadableListResponse(BaseModel):
 
 class StartDownloadRequest(BaseModel):
     repo_id: str
+
+
+# ── Presets ─────────────────────────────────────────────────────────────────
+
+
+class PresetInfo(BaseModel):
+    id: str
+    name: str
+    params_json: str = "{}"
+    created_at: str = ""
+    updated_at: str = ""
+
+
+class PresetCreateRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100)
+    params_json: str = "{}"
+
+
+class PresetUpdateRequest(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=100)
+    params_json: Optional[str] = None
+
+
+# ── Batch Export ────────────────────────────────────────────────────────────
+
+
+class BatchExportRequest(BaseModel):
+    track_ids: list[str] = Field(..., min_length=1, max_length=50)
+    target_lufs: float = Field(-14.0, ge=-30.0, le=0.0)
+    true_peak_db: float = Field(-1.0, ge=-6.0, le=0.0)
+    sample_rate: int = Field(44100, ge=22050, le=96000)
