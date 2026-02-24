@@ -26,6 +26,212 @@ from models.schemas import (
 from services.audio_manager import compute_peaks, get_audio_url, get_audio_duration
 
 
+# ── Post-load fix for transformers 5.x meta-device buffer corruption ─────
+#
+# Transformers 5.x creates models on the 'meta' device and then loads weights.
+# Non-persistent buffers (registered with persistent=False) are NOT in the
+# state_dict, so after loading they get replaced with torch.empty_like() —
+# losing their computed values entirely.
+#
+# vector_quantize_pytorch's FSQ and ResidualFSQ have critical non-persistent
+# buffers (_levels, _basis, scales, soft_clamp_input_value) that are computed
+# from constructor args.  After the meta→real transition, these contain garbage.
+#
+# This function walks a loaded model and fixes all FSQ/ResidualFSQ instances.
+# ──────────────────────────────────────────────────────────────────────────────
+
+def _fix_fsq_buffers_after_load(model) -> int:
+    """Fix corrupted non-persistent buffers in all FSQ/ResidualFSQ modules.
+
+    Transformers 5.x creates models on the 'meta' device and then loads state_dict.
+    Non-persistent buffers (persistent=False) are NOT in the state_dict, so after
+    loading they get replaced with torch.empty_like() — containing garbage values.
+
+    This function reads the correct levels from model.config and force-fixes all
+    FSQ and ResidualFSQ instances. It does NOT rely on any venv patches.
+
+    Returns the number of modules fixed.
+    """
+    import torch
+    from torch import tensor, int32
+
+    # Read the authoritative levels from model config
+    config = getattr(model, "config", None)
+    if config is None:
+        print("  [FSQ FIX] WARNING: model has no config, cannot fix FSQ buffers")
+        return 0
+
+    config_levels = getattr(config, "fsq_input_levels", None)
+    config_num_quantizers = getattr(config, "fsq_input_num_quantizers", None)
+
+    if config_levels is None:
+        print("  [FSQ FIX] WARNING: config has no fsq_input_levels, cannot fix FSQ buffers")
+        return 0
+
+    print(f"  [FSQ FIX] Config: fsq_input_levels={config_levels}, "
+          f"fsq_input_num_quantizers={config_num_quantizers}")
+
+    fixed = 0
+
+    for name, module in model.named_modules():
+        cls_name = type(module).__name__
+
+        # ── Fix FSQ modules ──────────────────────────────────────────────
+        if cls_name == "FSQ":
+            # Determine correct levels: prefer _init_levels (venv patch),
+            # fall back to config, fall back to module.levels attribute
+            init_levels = getattr(module, "_init_levels", None)
+            if init_levels is None:
+                init_levels = list(config_levels)
+
+            _levels_buf = getattr(module, "_levels", None)
+            if _levels_buf is None:
+                continue
+            if _levels_buf.is_meta:
+                continue
+
+            device = _levels_buf.device
+            correct_levels = tensor(init_levels, dtype=int32, device=device)
+
+            # Log current vs expected values
+            levels_match = torch.equal(_levels_buf, correct_levels)
+            print(f"  [FSQ FIX] {name}: current _levels={_levels_buf.tolist()}, "
+                  f"expected={init_levels}, match={levels_match}")
+
+            # Always force-restore (even if they look equal, rebuild codebook
+            # if codebook_size is still 0)
+            codebook_size = getattr(module, "codebook_size", -1)
+            needs_fix = not levels_match or codebook_size == 0
+
+            if needs_fix:
+                _levels_buf.copy_(correct_levels)
+                # Also save _init_levels for any future rebuild calls
+                module._init_levels = init_levels
+
+                # Restore _basis
+                correct_basis = torch.cumprod(
+                    tensor([1] + init_levels[:-1], device=device), dim=0, dtype=int32
+                )
+                _basis_buf = getattr(module, "_basis", None)
+                if _basis_buf is not None:
+                    _basis_buf.copy_(correct_basis)
+
+                # Rebuild codebook
+                if getattr(module, "return_indices", False):
+                    module.codebook_size = correct_levels.prod().item()
+                    implicit_codebook = module._indices_to_codes(
+                        torch.arange(module.codebook_size, device=device)
+                    )
+                    module.register_buffer(
+                        "implicit_codebook", implicit_codebook, persistent=False
+                    )
+
+                fixed += 1
+                print(f"  [FSQ FIX] {name}: FIXED _levels={init_levels}, "
+                      f"codebook_size={module.codebook_size}")
+
+        # ── Fix ResidualFSQ modules ──────────────────────────────────────
+        elif cls_name == "ResidualFSQ":
+            # Use module.levels (Python list, always set in __init__)
+            # or fall back to config
+            levels = getattr(module, "levels", None)
+            if levels is None:
+                levels = list(config_levels)
+
+            scales_buf = getattr(module, "scales", None)
+            if scales_buf is None:
+                continue
+            if scales_buf.is_meta:
+                continue
+
+            device = scales_buf.device
+            levels_t = tensor(levels, device=device).float()
+            num_q = getattr(module, "num_quantizers", config_num_quantizers or 1)
+
+            # Compute correct scales
+            correct_scales = torch.stack(
+                [levels_t ** -ind for ind in range(num_q)]
+            )
+
+            scales_match = torch.equal(scales_buf, correct_scales)
+            rfsq_codebook_size = getattr(module, "codebook_size", -1)
+            print(f"  [RFSQ FIX] {name}: scales_match={scales_match}, "
+                  f"codebook_size={rfsq_codebook_size}")
+
+            needs_fix = not scales_match or rfsq_codebook_size == 0
+
+            if needs_fix:
+                scales_buf.copy_(correct_scales)
+
+                # Restore soft_clamp_input_value
+                scv = getattr(module, "soft_clamp_input_value", None)
+                if scv is not None and not scv.is_meta:
+                    correct_clamp = 1 + (1 / (levels_t - 1))
+                    scv.copy_(correct_clamp)
+
+                # Update codebook_size from FSQ layers (already fixed above)
+                layers = getattr(module, "layers", [])
+                if len(layers) > 0:
+                    first_cb = getattr(layers[0], "codebook_size", 0)
+                    if first_cb > 0:
+                        module.codebook_size = first_cb
+
+                fixed += 1
+                print(f"  [RFSQ FIX] {name}: FIXED scales, "
+                      f"codebook_size={module.codebook_size}")
+
+    return fixed
+
+
+def _verify_fsq_health(model) -> bool:
+    """Run a quick diagnostic to verify FSQ modules produce sensible output.
+
+    Creates a dummy input, runs it through the audio tokenizer's quantizer,
+    and checks the output is non-zero.
+    """
+    import torch
+
+    config = getattr(model, "config", None)
+    if config is None:
+        return True  # can't verify
+
+    # Find the audio tokenizer
+    tokenizer = getattr(model, "tokenizer", None)
+    if tokenizer is None:
+        print("  [FSQ VERIFY] No tokenizer found in model, skipping health check")
+        return True
+
+    quantizer = getattr(tokenizer, "quantizer", None)
+    if quantizer is None:
+        print("  [FSQ VERIFY] No quantizer found in tokenizer, skipping health check")
+        return True
+
+    try:
+        device = next(quantizer.parameters()).device
+        dtype = next(quantizer.parameters()).dtype
+
+        # Create a dummy input matching expected dimensions
+        fsq_dim = getattr(config, "fsq_dim", 2048)
+        dummy = torch.randn(1, 4, fsq_dim, device=device, dtype=dtype)
+
+        with torch.no_grad():
+            quantized, indices = quantizer(dummy)
+
+        # Check output is non-zero
+        q_abs_mean = quantized.abs().mean().item()
+        idx_unique = indices.unique().numel()
+        print(f"  [FSQ VERIFY] quantized abs_mean={q_abs_mean:.6f}, "
+              f"indices unique={idx_unique}, shape={quantized.shape}")
+
+        if q_abs_mean < 1e-6:
+            print("  [FSQ VERIFY] WARNING: quantized output is near-zero!")
+            return False
+        return True
+    except Exception as e:
+        print(f"  [FSQ VERIFY] Health check failed with error: {e}")
+        return False
+
+
 class InferenceService:
     """Singleton that manages ACE-Step model lifecycle + generation."""
 
@@ -126,6 +332,8 @@ class InferenceService:
             lazy=True,  # Defer actual weight loading until first generation
             custom_checkpoint_dir=cp_root,
         )
+        # Wrap ensure_models_loaded to fix FSQ buffers after loading
+        self._wrap_ensure_models_loaded()
         self.current_model_name = model_name
         self.current_model_type = config.detect_model_type(model_name)
 
@@ -146,6 +354,45 @@ class InferenceService:
 
         self._initialized = True
         return status_msg
+
+    def _wrap_ensure_models_loaded(self):
+        """Wrap the handler's ensure_models_loaded to fix FSQ buffers after loading.
+
+        Transformers 5.x corrupts non-persistent buffers in FSQ/ResidualFSQ
+        modules.  This wrapper runs _fix_fsq_buffers_after_load on the DiT model
+        right after the original ensure_models_loaded completes, then verifies
+        the quantizer produces sensible output.
+        """
+        handler = self.dit_handler
+        if handler is None:
+            return
+
+        original_fn = handler.ensure_models_loaded
+
+        def _patched_ensure_models_loaded():
+            was_loaded = handler._models_loaded
+            original_fn()
+            if not was_loaded and handler._models_loaded and handler.model is not None:
+                print("=" * 60)
+                print("[InferenceService] Post-load FSQ buffer fix starting...")
+                print(f"  Model type: {type(handler.model).__name__}")
+                print(f"  Model config class: {type(handler.model.config).__name__}")
+
+                n = _fix_fsq_buffers_after_load(handler.model)
+                if n:
+                    print(f"[InferenceService] Fixed {n} FSQ/ResidualFSQ module(s)")
+                else:
+                    print("[InferenceService] No FSQ modules needed fixing")
+
+                # Verify the quantizer works
+                ok = _verify_fsq_health(handler.model)
+                if ok:
+                    print("[InferenceService] FSQ health check PASSED")
+                else:
+                    print("[InferenceService] FSQ health check FAILED — audio may be silent!")
+                print("=" * 60)
+
+        handler.ensure_models_loaded = _patched_ensure_models_loaded
 
     # ── Model Management ──────────────────────────────────────────────────
 
@@ -174,6 +421,7 @@ class InferenceService:
             lazy=True,
             custom_checkpoint_dir=cp_root,
         )
+        self._wrap_ensure_models_loaded()
         self.current_model_name = model_name
         self.current_model_type = config.detect_model_type(model_name)
         return status_msg
@@ -479,6 +727,27 @@ class InferenceService:
 
         if not result.success:
             raise RuntimeError(result.error or "Generation failed")
+
+        # ── Audio diagnostics ───────────────────────────────────────
+        print("=" * 60)
+        print(f"[AUDIO DIAG] Generation complete, {len(result.audios)} audio(s)")
+        for i, audio in enumerate(result.audios):
+            audio_path = audio.get("path", "")
+            if audio_path:
+                try:
+                    import soundfile as sf
+                    import numpy as np
+                    data, sr = sf.read(audio_path)
+                    rms = np.sqrt(np.mean(data ** 2))
+                    peak = np.max(np.abs(data))
+                    print(f"  Audio {i}: sr={sr}, shape={data.shape}, "
+                          f"rms={rms:.6f}, peak={peak:.6f}, "
+                          f"dtype={data.dtype}")
+                    if rms < 1e-4:
+                        print(f"  WARNING: Audio {i} is near-silent (RMS={rms:.8f})")
+                except Exception as e:
+                    print(f"  Audio {i}: couldn't analyze: {e}")
+        print("=" * 60)
 
         # Convert to TrackInfo objects
         tracks: list[TrackInfo] = []
