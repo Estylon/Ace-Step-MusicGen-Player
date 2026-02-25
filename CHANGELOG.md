@@ -4,6 +4,21 @@ All notable changes to ACE-Step MusicGen Player.
 
 ---
 
+## [0.5.1] — 2026-02-25
+
+### Added — MP3 Export from Library
+- **"Export MP3" button** in Library multi-select action bar alongside the existing "Export WAV"
+- **MP3 encoding** via soundfile's native MP3 support (libsndfile 1.2.2+) — no extra dependencies
+- Batch export endpoint now accepts a `format` parameter (`wav` or `mp3`) and `mp3_bitrate`
+- Mastered audio (LUFS normalized + true-peak limited) is encoded to MP3 before ZIP packaging
+
+### Fixed — LoRA Trigger Word Lost During CoT
+- **Style tag (trigger word) is now sent as a separate `style_tag` field** instead of being prepended to the caption
+- ACE-Step injects `style_tag` **after** CoT caption processing, right before DiT, so the LM never rewrites or drops the trigger word
+- New `style_tag` field in `GenerationParams` (ACE-Step) and `GenerateRequest` (backend schema)
+
+---
+
 ## [0.5.0] — 2026-02-24
 
 ### Added — Saveable Generation Presets
