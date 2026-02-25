@@ -99,11 +99,9 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
   generate: async () => {
     const { form } = get()
 
-    // Prepend the active adapter's style tag (trigger word) to the caption
+    // Send style tag (trigger word) as a separate field — injected after CoT processing
     const styleTag = useSettingsStore.getState().getActiveStyleTag()
-    const effectiveCaption =
-      styleTag && form.caption ? `${styleTag} ${form.caption}` : form.caption
-    const payload = { ...form, caption: effectiveCaption }
+    const payload = { ...form, style_tag: styleTag || '' }
 
     try {
       const { job_id } = await createGeneration(payload)

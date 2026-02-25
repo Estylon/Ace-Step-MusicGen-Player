@@ -14,6 +14,7 @@ class GenerateRequest(BaseModel):
 
     # Text inputs
     caption: str = Field("", max_length=512, description="Short music description prompt")
+    style_tag: str = Field("", max_length=128, description="LoRA trigger word, prepended after CoT")
     lyrics: str = Field("", max_length=4096, description="Full lyrics or [Instrumental]")
     instrumental: bool = False
 

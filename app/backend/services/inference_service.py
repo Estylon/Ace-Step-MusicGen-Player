@@ -827,6 +827,7 @@ class InferenceService:
 
         params = GenerationParams(
             caption=request.caption,
+            style_tag=request.style_tag,
             lyrics=request.lyrics,
             instrumental=request.instrumental,
             bpm=request.bpm,

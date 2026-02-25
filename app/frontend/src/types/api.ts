@@ -18,6 +18,7 @@ import type {
 export interface GenerateRequest {
   // Text inputs
   caption: string;
+  style_tag?: string;
   lyrics: string;
   instrumental: boolean;
 
