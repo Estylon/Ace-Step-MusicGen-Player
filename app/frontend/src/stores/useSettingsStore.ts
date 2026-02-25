@@ -64,8 +64,15 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   fetchModelStatus: async () => {
     set({ loading: true })
     try {
+      const prevName = get().modelStatus?.current_model?.name ?? null
       const status = await getModelStatus()
       set({ modelStatus: status })
+      // Auto-apply model defaults when the loaded model changes
+      const curr = status.current_model
+      if (curr?.capabilities && curr.name !== prevName) {
+        const { useGenerationStore } = await import('./useGenerationStore')
+        useGenerationStore.getState().applyModelDefaults(curr.capabilities)
+      }
     } catch (err) {
       console.error('Failed to fetch model status:', err)
     } finally {

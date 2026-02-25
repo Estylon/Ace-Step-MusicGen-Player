@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import type { GenerateRequest } from '../types/api'
-import type { GenerationJob, TrackInfo } from '../types'
+import type { GenerationJob, TrackInfo, ModelCapabilities } from '../types'
 import { createGeneration, subscribeToProgress } from '../api/generate'
 import { parsePreset, exportPreset, type ImportResult, type ExportOptions } from '../lib/presetIO'
 import { useSettingsStore } from './useSettingsStore'
@@ -17,6 +17,7 @@ interface GenerationState {
   importPreset: (jsonInput: string | Record<string, unknown>) => ImportResult
   exportPreset: (options?: ExportOptions) => string
   resetForm: () => void
+  applyModelDefaults: (caps: ModelCapabilities) => void
   generate: () => Promise<void>
   clearResults: () => void
   updateTrackTitle: (trackId: string, newTitle: string) => void
@@ -65,6 +66,21 @@ const defaultForm: GenerateRequest = {
   audio_format: 'flac',
 }
 
+/** Derive model-dependent form overrides from capabilities. */
+function getModelFormDefaults(caps: ModelCapabilities): Partial<GenerateRequest> {
+  const defaults: Partial<GenerateRequest> = {
+    inference_steps: caps.default_steps,
+    shift: caps.shift_default,
+    infer_method: (caps.infer_methods.includes('ode')
+      ? 'ode' : caps.infer_methods[0] || 'ode') as 'ode' | 'sde',
+  }
+  if (!caps.cfg_support) {
+    defaults.guidance_scale = 1.0
+    defaults.use_adg = false
+  }
+  return defaults
+}
+
 export const useGenerationStore = create<GenerationState>((set, get) => ({
   form: { ...defaultForm },
   activeJobs: new Map(),
@@ -81,8 +97,10 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
 
   importPreset: (jsonInput) => {
     const result = parsePreset(jsonInput)
+    const caps = useSettingsStore.getState().modelStatus?.current_model?.capabilities
+    const modelDefaults = caps ? getModelFormDefaults(caps) : {}
     set(() => ({
-      form: { ...defaultForm, ...result.formUpdate },
+      form: { ...defaultForm, ...modelDefaults, ...result.formUpdate },
     }))
     return result
   },
@@ -93,7 +111,21 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
   },
 
   resetForm: () => {
-    set({ form: { ...defaultForm } })
+    const caps = useSettingsStore.getState().modelStatus?.current_model?.capabilities
+    const modelDefaults = caps ? getModelFormDefaults(caps) : {}
+    set({ form: { ...defaultForm, ...modelDefaults } })
+  },
+
+  applyModelDefaults: (caps) => {
+    const modelDefaults = getModelFormDefaults(caps)
+    set((state) => {
+      const updates: Partial<GenerateRequest> = { ...modelDefaults }
+      // Reset task_type if not supported by this model
+      if (!caps.task_types.includes(state.form.task_type)) {
+        updates.task_type = 'text2music'
+      }
+      return { form: { ...state.form, ...updates } }
+    })
   },
 
   generate: async () => {
@@ -202,8 +234,10 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
       const parsed = JSON.parse(paramsJson)
       if (typeof parsed !== 'object' || parsed === null) return null
       const result = parsePreset(parsed)
+      const caps = useSettingsStore.getState().modelStatus?.current_model?.capabilities
+      const modelDefaults = caps ? getModelFormDefaults(caps) : {}
       set(() => ({
-        form: { ...defaultForm, ...result.formUpdate },
+        form: { ...defaultForm, ...modelDefaults, ...result.formUpdate },
       }))
       return result
     } catch {
